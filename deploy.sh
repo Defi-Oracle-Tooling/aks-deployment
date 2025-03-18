@@ -23,7 +23,7 @@ for region in $regions; do
     az deployment group create \
         --resource-group "$RESOURCE_GROUP_PREFIX-$region" \
         --template-file aks-deploy.json \
-        --parameters location="$region" aksName="$AKS_CLUSTER_PREFIX-$region"
+        --parameters location="$region" aksName="$AKS_CLUSTER_PREFIX-$region" dnsPrefix="$AKS_CLUSTER_PREFIX-$region"
 
     echo "AKS Deployment in $region completed!"
 done
