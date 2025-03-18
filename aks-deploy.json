@@ -19,6 +19,9 @@
       "apiVersion": "2022-09-01",
       "name": "[parameters('aksName')]",
       "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "agentPoolProfiles": [
           {

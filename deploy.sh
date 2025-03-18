@@ -11,8 +11,13 @@ AKS_CLUSTER_PREFIX="besu-aks"
 for region in $regions; do
     echo "Deploying AKS in $region..."
 
-    # Create resource group
-    az group create --name "$RESOURCE_GROUP_PREFIX-$region" --location $region
+    # Create resource group and check if it's created successfully
+    if az group create --name "$RESOURCE_GROUP_PREFIX-$region" --location $region; then
+        echo "Resource group created in $region."
+    else
+        echo "Skipping $region - Resource group creation failed."
+        continue
+    fi
 
     # Deploy AKS using ARM template
     az deployment group create \

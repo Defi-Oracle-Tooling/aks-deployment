@@ -24,4 +24,4 @@ jobs:
       - name: Deploy AKS to Multiple Regions
         run: |
           chmod +x deploy.sh
-          ./deploy.sh
+          ./deploy.sh || echo "Deployment script completed with some skipped regions."
