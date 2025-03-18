@@ -11,6 +11,9 @@
     "nodeCount": {
       "type": "int",
       "defaultValue": 6
+    },
+    "dnsPrefix": {
+      "type": "string"
     }
   },
   "resources": [
@@ -23,6 +26,7 @@
         "type": "SystemAssigned"
       },
       "properties": {
+        "dnsPrefix": "[parameters('dnsPrefix')]",
         "agentPoolProfiles": [
           {
             "name": "validator",
