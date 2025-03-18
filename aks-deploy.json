@@ -3,17 +3,23 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "type": "string"
+      "type": "string",
+      "defaultValue": "eastus"
     },
     "aksName": {
-      "type": "string"
+      "type": "string",
+      "defaultValue": "myAKSCluster",
+      "metadata": {
+        "description": "The name of the AKS cluster"
+      }
     },
     "nodeCount": {
       "type": "int",
       "defaultValue": 6
     },
     "dnsPrefix": {
-      "type": "string"
+      "type": "string",
+      "defaultValue": "myAKSClusterDNS"
     }
   },
   "resources": [
@@ -31,7 +37,9 @@
           {
             "name": "validator",
             "count": "[parameters('nodeCount')]",
-            "vmSize": "Standard_D16s_v4"
+            "vmSize": "Standard_D16s_v4",
+            "osType": "Linux",
+            "mode": "System"
           }
         ],
         "networkProfile": {
