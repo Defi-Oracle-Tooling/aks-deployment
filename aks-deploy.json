@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string"
+    },
+    "aksName": {
+      "type": "string"
+    },
+    "nodeCount": {
+      "type": "int",
+      "defaultValue": 6
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ContainerService/managedClusters",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('aksName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "agentPoolProfiles": [
+          {
+            "name": "validator",
+            "count": "[parameters('nodeCount')]",
+            "vmSize": "Standard_D16s_v4"
+          }
+        ],
+        "networkProfile": {
+          "networkPlugin": "azure"
+        }
+      }
+    }
+  ]
+}
