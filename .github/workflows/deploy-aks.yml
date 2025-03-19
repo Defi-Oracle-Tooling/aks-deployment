@@ -24,4 +24,10 @@ jobs:
       - name: Deploy AKS to Multiple Regions
         run: |
           chmod +x deploy.sh
-          ./deploy.sh || echo "Deployment script completed with some skipped regions."
+          ./deploy.sh || echo "❌ Deployment failed. See failed_regions.log"
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "❌ AKS Deployment failed in some regions." >> failed_regions.log
+          cat failed_regions.log
