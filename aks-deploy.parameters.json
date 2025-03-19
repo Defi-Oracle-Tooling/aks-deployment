@@ -3,16 +3,25 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "location": {
-            "value": "eastus"
+            "value": "[parameters('location')]"
         },
         "aksName": {
-            "value": "myAKSCluster"
+            "value": "[concat('besu-aks-', parameters('location'))]"
         },
         "nodeCount": {
-            "value": 6
+            "value": "[parameters('nodeCount')]"
         },
         "dnsPrefix": {
-            "value": "myAKSClusterDNS"
+            "value": "[concat('besu-aks-', parameters('location'), '-dns')]"
+        },
+        "vmSize": {
+            "value": "[parameters('vmSize')]"
+        },
+        "enableRBAC": {
+            "value": true
+        },
+        "networkPlugin": {
+            "value": "azure"
         }
     }
 }

@@ -1,87 +1,162 @@
 #!/bin/bash
 
-# Define node allocation per region
-declare -A NODE_ALLOCATION
-NODE_ALLOCATION["australiaeast"]="5,7,0"
-NODE_ALLOCATION["canadacentral"]="5,7,0"
-NODE_ALLOCATION["francecentral"]="5,7,0"
-NODE_ALLOCATION["israelcentral"]="5,7,0"
-NODE_ALLOCATION["switzerlandnorth"]="5,7,0"
-NODE_ALLOCATION["australiacentral"]="0,8,0"
-NODE_ALLOCATION["australiasoutheast"]="0,8,0"
-NODE_ALLOCATION["southindia"]="0,8,0"
-NODE_ALLOCATION["ukwest"]="0,8,0"
-NODE_ALLOCATION["eastasia"]="0,6,0"
-NODE_ALLOCATION["northeurope"]="0,6,0"
-NODE_ALLOCATION["southeastasia"]="0,6,0"
-NODE_ALLOCATION["westeurope"]="0,6,0"
-NODE_ALLOCATION["brazilsouth"]="0,0,5"
-NODE_ALLOCATION["centralindia"]="0,0,5"
-NODE_ALLOCATION["germanywestcentral"]="0,0,5"
-NODE_ALLOCATION["indonesiacentral"]="0,0,5"
-NODE_ALLOCATION["italynorth"]="0,0,5"
-NODE_ALLOCATION["japaneast"]="0,0,5"
-NODE_ALLOCATION["japanwest"]="0,0,5"
-NODE_ALLOCATION["koreacentral"]="0,0,5"
-NODE_ALLOCATION["mexicocentral"]="0,0,5"
-NODE_ALLOCATION["newzealandnorth"]="0,0,5"
-NODE_ALLOCATION["norwayeast"]="0,0,5"
-NODE_ALLOCATION["polandcentral"]="0,0,5"
-NODE_ALLOCATION["southafricanorth"]="0,0,5"
-NODE_ALLOCATION["spaincentral"]="0,0,5"
-NODE_ALLOCATION["swedencentral"]="0,0,5"
-NODE_ALLOCATION["uaenorth"]="0,0,5"
-NODE_ALLOCATION["uksouth"]="0,0,5"
+# Load region list
+regions=$(cat regions.txt)
 
-# Regions to deploy AKS
-regions=("${!NODE_ALLOCATION[@]}")
+# Log files for deployment states
+SUCCESS_FILE="success_regions.log"
+FAILED_FILE="failed_regions.log"
+LOG_FILE="deployment.log"
+ROLLBACK_FILE="rollback.log"
+echo "" > $FAILED_FILE
+
 RESOURCE_GROUP_PREFIX="Besu-RG"
 AKS_CLUSTER_PREFIX="besu-aks"
-LOG_FILE="failed_regions.log"
-RETRY_LIMIT=2
+QUOTAS_FILE="quotas_20250319-0530.md"
 
-# Clear previous failure log
-echo "" > $LOG_FILE
+# Function to check if a region is already successfully deployed
+is_region_deployed() {
+    local region=$1
+    grep -q "^$region$" "$SUCCESS_FILE"
+}
 
-for region in "${regions[@]}"; do
-    echo "Deploying AKS in $region..."
+# Function to check if the AKS cluster exists and is healthy
+is_cluster_healthy() {
+    local resource_group=$1
+    local cluster_name=$2
+    az aks show --resource-group "$resource_group" --name "$cluster_name" --query "provisioningState" -o tsv | grep -q "Succeeded"
+}
 
-    IFS=',' read -r d16_count d4_count d2_count <<< "${NODE_ALLOCATION[$region]}"
+# Function to fetch vCPU quota dynamically
+fetch_vcpu_quota() {
+    local region=$1
+    az vm list-usage --location $region --query "[?name.value=='standardDSv4Family'].limit" --output tsv
+}
 
-    # Create resource group
-    az group create --name "$RESOURCE_GROUP_PREFIX-$region" --location $region || {
-        echo "❌ Failed to create resource group in $region" >> $LOG_FILE
-        continue
-    }
+# Function to determine optimal instance size
+get_instance_size() {
+    local vCPU_LIMIT=$1
+    if [[ $vCPU_LIMIT -ge 108 ]]; then
+        echo "Standard_D16s_v4 6"
+    elif [[ $vCPU_LIMIT -ge 32 ]]; then
+        echo "Standard_D4s_v4 7"
+    elif [[ $vCPU_LIMIT -ge 24 ]]; then
+        echo "Standard_D4s_v4 5"
+    elif [[ $vCPU_LIMIT -ge 10 ]]; then
+        echo "Standard_D2s_v4 4"
+    else
+        echo ""
+    fi
+}
 
-    # Deploy AKS with node pools
-    for attempt in $(seq 1 $RETRY_LIMIT); do
-        az aks create --resource-group "$RESOURCE_GROUP_PREFIX-$region" --name "$AKS_CLUSTER_PREFIX-$region" \
-            --nodepool-name "validator16" --node-count $d16_count --node-vm-size "Standard_D16s_v4" \
-            --enable-managed-identity --generate-ssh-keys && break || {
-                echo "❌ Attempt $attempt: Failed AKS deployment in $region" >> $LOG_FILE
+# Function to create resource group
+create_resource_group() {
+    local region=$1
+    az group create --name "$RESOURCE_GROUP_PREFIX-$region" --location $region
+}
+
+# Function to deploy AKS
+deploy_aks() {
+    local region=$1
+    local NODE_TYPE=$2
+    local NODE_COUNT=$3
+    for attempt in {1..2}; do
+        az deployment group create --resource-group "$RESOURCE_GROUP_PREFIX-$region" \
+            --template-file aks-deploy.json \
+            --parameters aks-deploy.parameters.json \
+            --parameters location="$region" nodeCount="$NODE_COUNT" vmSize="$NODE_TYPE" && return 0 || {
+                echo "❌ Attempt $attempt: Failed AKS deployment in $region" >> $FAILED_FILE
                 sleep 10
             }
     done
+    return 1
+}
 
-    az aks nodepool add --resource-group "$RESOURCE_GROUP_PREFIX-$region" --cluster-name "$AKS_CLUSTER_PREFIX-$region" \
-        --name "validator4" --node-count $d4_count --node-vm-size "Standard_D4s_v4" || {
-            echo "❌ Failed to add D4s_v4 nodes in $region" >> $LOG_FILE
-        }
+# Function to deploy to a region
+deploy_to_region() {
+    local region=$1
+    if is_region_deployed "$region"; then
+        echo "Region $region already deployed successfully. Skipping..." | tee -a $LOG_FILE
+        return
+    fi
 
-    az aks nodepool add --resource-group "$RESOURCE_GROUP_PREFIX-$region" --cluster-name "$AKS_CLUSTER_PREFIX-$region" \
-        --name "validator2" --node-count $d2_count --node-vm-size "Standard_D2s_v4" || {
-            echo "❌ Failed to add D2s_v4 nodes in $region" >> $LOG_FILE
-        }
+    echo "🚀 Deploying AKS in $region..." | tee -a $LOG_FILE
 
-    echo "✅ AKS Deployment in $region completed!"
-done
+    vCPU_LIMIT=$(fetch_vcpu_quota $region)
+    instance_info=$(get_instance_size $vCPU_LIMIT)
+    if [[ -z $instance_info ]]; then
+        echo "⚠️ Skipping $region: Not enough vCPUs available ($vCPU_LIMIT)" | tee -a $FAILED_FILE $LOG_FILE
+        return
+    fi
 
-# Alert if failures occurred
-if [[ -s $LOG_FILE ]]; then
-    echo "⚠️ Some regions failed to deploy. See $LOG_FILE"
+    NODE_TYPE=$(echo $instance_info | cut -d' ' -f1)
+    NODE_COUNT=$(echo $instance_info | cut -d' ' -f2)
+
+    echo "📌 Region: $region | vCPU: $vCPU_LIMIT | VM Size: $NODE_TYPE | Nodes: $NODE_COUNT" | tee -a $LOG_FILE
+
+    if is_cluster_healthy "$RESOURCE_GROUP_PREFIX-$region" "$AKS_CLUSTER_PREFIX-$region"; then
+        echo "AKS cluster in region $region is already healthy. Skipping deployment..." | tee -a $LOG_FILE
+        echo "$region" >> "$SUCCESS_FILE"
+        return
+    fi
+
+    if ! create_resource_group $region; then
+        echo "❌ Failed to create resource group in $region" | tee -a $FAILED_FILE $LOG_FILE
+        return
+    fi
+
+    if deploy_aks $region $NODE_TYPE $NODE_COUNT; then
+        echo "$region" >> "$SUCCESS_FILE"
+        echo "✅ Deployment in $region completed!" | tee -a $LOG_FILE
+    else
+        echo "$region" >> "$FAILED_FILE"
+        echo "❌ Deployment in $region failed!" | tee -a $LOG_FILE
+    fi
+}
+
+# Function to clean up partially created resources
+cleanup_resources() {
+    local region=$1
+    az group delete --name "$RESOURCE_GROUP_PREFIX-$region" --yes --no-wait
+}
+
+# Function to rollback deployment
+rollback_deployment() {
+    local region=$1
+    echo "Rolling back deployment in $region..." | tee -a $ROLLBACK_FILE
+    cleanup_resources $region
+    echo "Rollback completed for $region" | tee -a $ROLLBACK_FILE
+}
+
+# Parallel deployment to regions
+export -f is_region_deployed
+export -f is_cluster_healthy
+export -f fetch_vcpu_quota
+export -f get_instance_size
+export -f create_resource_group
+export -f deploy_aks
+export -f deploy_to_region
+export -f cleanup_resources
+export -f rollback_deployment
+
+parallel deploy_to_region ::: $(cat regions.txt)
+
+# Notify on failures
+if [[ -s $FAILED_FILE ]]; then
+    echo "⚠️ Some regions failed to deploy. Check $FAILED_FILE." | tee -a $LOG_FILE
     az monitor metrics alert create --name "AKSDeploymentFailure" --resource-group "$RESOURCE_GROUP_PREFIX" \
         --scopes "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP_PREFIX" \
         --description "Alert for AKS deployment failures" --condition "count failed_regions.log > 0" \
-        --action-group "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP_PREFIX/providers/microsoft.insights/actionGroups/AKSFailureAlerts"
+        --action-group "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP_PREFIX/providers/microsoft.insights.actionGroups/AKSFailureAlerts"
+
+    # Cleanup partially created resources
+    while IFS= read -r region; do
+        cleanup_resources $region
+        rollback_deployment $region
+    done < $FAILED_FILE
+fi
+
+# Notify on success
+if [[ -s $SUCCESS_FILE ]]; then
+    echo "✅ All regions deployed successfully. Check $SUCCESS_FILE." | tee -a $LOG_FILE
 fi
