@@ -64,8 +64,24 @@ deploy_aks() {
         az deployment group create --resource-group "$RESOURCE_GROUP_PREFIX-$region" \
             --template-file aks-deploy.json \
             --parameters aks-deploy.parameters.json \
-            --parameters location="$region" nodeCount="$NODE_COUNT" vmSize="$NODE_TYPE" && return 0 || {
+            --parameters location="$region" bootNodeCount="$NODE_COUNT" adminNodeCount="$NODE_COUNT" assignedNodeCount="$NODE_COUNT" publicNodeCount="$NODE_COUNT" regulatedNodeCount="$NODE_COUNT" && return 0 || {
                 echo "❌ Attempt $attempt: Failed AKS deployment in $region" >> $FAILED_FILE
+                sleep 10
+            }
+    done
+    return 1
+}
+
+# Function to deploy validator nodes
+deploy_validator_nodes() {
+    local region=$1
+    local NODE_COUNT=$2
+    for attempt in {1..2}; do
+        az deployment group create --resource-group "$RESOURCE_GROUP_PREFIX-$region" \
+            --template-file aks-deploy-validator.json \
+            --parameters aks-deploy.parameters.json \
+            --parameters location="$region" validatorNodeCount="$NODE_COUNT" && return 0 || {
+                echo "❌ Attempt $attempt: Failed validator nodes deployment in $region" >> $FAILED_FILE
                 sleep 10
             }
     done
@@ -105,7 +121,7 @@ deploy_to_region() {
         return
     fi
 
-    if deploy_aks $region $NODE_TYPE $NODE_COUNT; then
+    if deploy_aks $region $NODE_TYPE $NODE_COUNT && deploy_validator_nodes $region $NODE_COUNT; then
         echo "$region" >> "$SUCCESS_FILE"
         echo "✅ Deployment in $region completed!" | tee -a $LOG_FILE
     else
@@ -135,6 +151,7 @@ export -f fetch_vcpu_quota
 export -f get_instance_size
 export -f create_resource_group
 export -f deploy_aks
+export -f deploy_validator_nodes
 export -f deploy_to_region
 export -f cleanup_resources
 export -f rollback_deployment
@@ -147,7 +164,7 @@ if [[ -s $FAILED_FILE ]]; then
     az monitor metrics alert create --name "AKSDeploymentFailure" --resource-group "$RESOURCE_GROUP_PREFIX" \
         --scopes "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP_PREFIX" \
         --description "Alert for AKS deployment failures" --condition "count failed_regions.log > 0" \
-        --action-group "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP_PREFIX/providers/microsoft.insights.actionGroups/AKSFailureAlerts"
+        --action "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP_PREFIX/providers/microsoft.insights/actionGroups/AKSFailureAlerts"
 
     # Cleanup partially created resources
     while IFS= read -r region; do

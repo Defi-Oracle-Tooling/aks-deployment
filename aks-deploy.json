@@ -6,27 +6,65 @@
       "type": "string",
       "defaultValue": "eastus"
     },
-    "aksName": {
+    "aksClusterName": {
       "type": "string",
       "defaultValue": "myAKSCluster",
       "metadata": {
         "description": "The name of the AKS cluster"
       }
     },
-    "nodeCount": {
-      "type": "int",
-      "defaultValue": 6
-    },
     "dnsPrefix": {
       "type": "string",
       "defaultValue": "myAKSClusterDNS"
+    },
+    "bootNodeCount": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "The number of boot nodes in each region"
+      }
+    },
+    "validatorNodeCount": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "The number of validator nodes in each region"
+      }
+    },
+    "adminNodeCount": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "The number of admin member nodes"
+      }
+    },
+    "assignedNodeCount": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "The number of assigned member nodes"
+      }
+    },
+    "publicNodeCount": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "The number of public member nodes"
+      }
+    },
+    "regulatedNodeCount": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "The number of regulated member nodes"
+      }
     }
   },
   "resources": [
     {
       "type": "Microsoft.ContainerService/managedClusters",
       "apiVersion": "2022-09-01",
-      "name": "[parameters('aksName')]",
+      "name": "[parameters('aksClusterName')]",
       "location": "[parameters('location')]",
       "identity": {
         "type": "SystemAssigned"
@@ -35,16 +73,48 @@
         "dnsPrefix": "[parameters('dnsPrefix')]",
         "agentPoolProfiles": [
           {
+            "name": "bootnode",
+            "count": "[parameters('bootNodeCount')]",
+            "vmSize": "Standard_E8Ds_v4",
+            "osType": "Linux",
+            "mode": "System"
+          },
+          {
             "name": "validator",
-            "count": "[parameters('nodeCount')]",
+            "count": "[parameters('validatorNodeCount')]",
             "vmSize": "Standard_D16s_v4",
             "osType": "Linux",
             "mode": "System"
+          },
+          {
+            "name": "admin",
+            "count": "[parameters('adminNodeCount')]",
+            "vmSize": "Standard_NC6",
+            "osType": "Linux",
+            "mode": "System"
+          },
+          {
+            "name": "assigned",
+            "count": "[parameters('assignedNodeCount')]",
+            "vmSize": "Standard_F8s_v2",
+            "osType": "Linux",
+            "mode": "System"
+          },
+          {
+            "name": "public",
+            "count": "[parameters('publicNodeCount')]",
+            "vmSize": "Standard_Ev4",
+            "osType": "Linux",
+            "mode": "System"
+          },
+          {
+            "name": "regulated",
+            "count": "[parameters('regulatedNodeCount')]",
+            "vmSize": "Standard_EDSv4",
+            "osType": "Linux",
+            "mode": "System"
           }
-        ],
-        "networkProfile": {
-          "networkPlugin": "azure"
-        }
+        ]
       }
     }
   ]
