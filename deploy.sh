@@ -14,6 +14,18 @@ RESOURCE_GROUP_PREFIX="Besu-RG"
 AKS_CLUSTER_PREFIX="besu-aks"
 QUOTAS_FILE="quotas_20250319-0530.md"
 
+# Check if regions.txt is not empty
+if [ ! -s regions.txt ]; then
+    echo "Error: regions.txt is empty or not found." | tee -a $LOG_FILE
+    exit 1
+fi
+
+# Check if RESOURCE_GROUP_PREFIX and AKS_CLUSTER_PREFIX are set
+if [ -z "$RESOURCE_GROUP_PREFIX" ] || [ -z "$AKS_CLUSTER_PREFIX" ]; then
+    echo "Error: RESOURCE_GROUP_PREFIX or AKS_CLUSTER_PREFIX is not set." | tee -a $LOG_FILE
+    exit 1
+fi
+
 # Function to check if a region is already successfully deployed
 is_region_deployed() {
     local region=$1
@@ -36,10 +48,10 @@ fetch_vcpu_quota() {
 # Function to determine optimal instance size
 get_instance_size() {
     local vCPU_LIMIT=$1
-    if [[ $vCPU_LIMIT -ge 108 ]]; then
+    if [[ $vCPU_LIMIT -ge 128 ]]; then
         echo "Standard_D16s_v4 6"
     elif [[ $vCPU_LIMIT -ge 32 ]]; then
-        echo "Standard_D4s_v4 7"
+        echo "Standard_D8s_v4 7"
     elif [[ $vCPU_LIMIT -ge 24 ]]; then
         echo "Standard_D4s_v4 5"
     elif [[ $vCPU_LIMIT -ge 10 ]]; then
@@ -52,7 +64,7 @@ get_instance_size() {
 # Function to create resource group
 create_resource_group() {
     local region=$1
-    az group create --name "$RESOURCE_GROUP_PREFIX-$region" --location $region
+    az group create --name "${RESOURCE_GROUP_PREFIX}-${region}" --location $region
 }
 
 # Function to deploy AKS
@@ -61,7 +73,7 @@ deploy_aks() {
     local NODE_TYPE=$2
     local NODE_COUNT=$3
     for attempt in {1..2}; do
-        az deployment group create --resource-group "$RESOURCE_GROUP_PREFIX-$region" \
+        az deployment group create --resource-group "${RESOURCE_GROUP_PREFIX}-${region}" \
             --template-file aks-deploy.json \
             --parameters aks-deploy.parameters.json \
             --parameters location="$region" bootNodeCount="$NODE_COUNT" adminNodeCount="$NODE_COUNT" assignedNodeCount="$NODE_COUNT" publicNodeCount="$NODE_COUNT" regulatedNodeCount="$NODE_COUNT" && return 0 || {
@@ -77,7 +89,7 @@ deploy_validator_nodes() {
     local region=$1
     local NODE_COUNT=$2
     for attempt in {1..2}; do
-        az deployment group create --resource-group "$RESOURCE_GROUP_PREFIX-$region" \
+        az deployment group create --resource-group "${RESOURCE_GROUP_PREFIX}-${region}" \
             --template-file aks-deploy-validator.json \
             --parameters aks-deploy.parameters.json \
             --parameters location="$region" validatorNodeCount="$NODE_COUNT" && return 0 || {
