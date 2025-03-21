@@ -1,0 +1,130 @@
+name: Security Validation
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/**'
+      - 'scripts/**'
+      - 'monitoring/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'infrastructure/**'
+      - 'scripts/**'
+      - 'monitoring/**'
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          soft_fail: true
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infrastructure/
+          framework: terraform,kubernetes
+
+  policy-validation:
+    name: Policy Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Validate Network Policies
+        run: |
+          chmod +x scripts/deployment/verify-security.sh
+          ./scripts/deployment/verify-security.sh --check-network-policies
+
+      - name: Validate Pod Security Policies
+        run: |
+          ./scripts/deployment/verify-security.sh --check-pod-security
+
+      - name: Validate Audit Policies
+        run: |
+          ./scripts/deployment/verify-security.sh --check-audit-policies
+
+  compliance-check:
+    name: Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod 755 ./opa
+          sudo mv opa /usr/local/bin/
+
+      - name: Run OPA Policy Checks
+        run: |
+          opa eval --format pretty --data infrastructure/policies/ --input infrastructure/ "data.main.deny"
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
+
+  report:
+    name: Generate Report
+    needs: [security-scan, policy-validation, compliance-check, secret-scanning]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate Security Report
+        run: |
+          echo "Security Validation Report" > security-report.md
+          echo "=========================" >> security-report.md
+          echo "Generated on: $(date)" >> security-report.md
+          echo "" >> security-report.md
+          
+          if [ "${{ needs.security-scan.result }}" == "success" ]; then
+            echo "✅ Security Scan: Passed" >> security-report.md
+          else
+            echo "❌ Security Scan: Failed" >> security-report.md
+          fi
+          
+          if [ "${{ needs.policy-validation.result }}" == "success" ]; then
+            echo "✅ Policy Validation: Passed" >> security-report.md
+          else
+            echo "❌ Policy Validation: Failed" >> security-report.md
+          fi
+          
+          if [ "${{ needs.compliance-check.result }}" == "success" ]; then
+            echo "✅ Compliance Check: Passed" >> security-report.md
+          else
+            echo "❌ Compliance Check: Failed" >> security-report.md
+          fi
+          
+          if [ "${{ needs.secret-scanning.result }}" == "success" ]; then
+            echo "✅ Secret Scanning: Passed" >> security-report.md
+          else
+            echo "❌ Secret Scanning: Failed" >> security-report.md
+          fi
+
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-report.md

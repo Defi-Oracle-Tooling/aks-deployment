@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "besu-validator.fullname" . }}
+  labels:
+    {{- include "besu-validator.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "besu-validator.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "besu-validator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "besu-validator.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: {{ .Values.monitoring.prometheus.scrape | quote }}
+        prometheus.io/port: {{ .Values.monitoring.prometheus.port | quote }}
+    spec:
+      containers:
+        - name: besu
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --data-path=/data
+            - --network-id={{ .Values.besu.networkId }}
+            - --metrics-enabled={{ .Values.besu.metrics.enabled }}
+            - --metrics-host={{ .Values.besu.metrics.host }}
+            - --metrics-port={{ .Values.besu.metrics.port }}
+            - --p2p-port={{ .Values.network.p2pPort }}
+            - --rpc-http-enabled=true
+            - --rpc-http-host=0.0.0.0
+            - --rpc-http-port={{ .Values.network.rpcPort }}
+            - --rpc-ws-enabled=true
+            - --rpc-ws-host=0.0.0.0
+            - --rpc-ws-port={{ .Values.network.wsPort }}
+            {{- if .Values.besu.miningEnabled }}
+            - --miner-enabled
+            - --miner-coinbase=$(COINBASE_ADDRESS)
+            {{- end }}
+            {{- if .Values.besu.bootNodes }}
+            - --bootnodes={{ join "," .Values.besu.bootNodes }}
+            {{- end }}
+          env:
+            - name: COINBASE_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.security.nodeKeySecretName }}
+                  key: coinbase
+          {{- if .Values.security.keyVaultEnabled }}
+            - name: AZURE_KEY_VAULT_NAME
+              value: {{ .Values.security.keyVaultName }}
+          {{- end }}
+          ports:
+            - name: p2p
+              containerPort: {{ .Values.network.p2pPort }}
+              protocol: TCP
+            - name: rpc
+              containerPort: {{ .Values.network.rpcPort }}
+              protocol: TCP
+            - name: ws
+              containerPort: {{ .Values.network.wsPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.besu.metrics.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ .Values.persistence.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

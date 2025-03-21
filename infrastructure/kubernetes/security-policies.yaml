@@ -1,0 +1,216 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAzureBlockPD
+metadata:
+  name: block-pd-creation
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - "besu"
+      - "monitoring"
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: besu
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-besu-p2p
+  namespace: besu
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: besu
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: besu
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: besu
+    ports:
+    - protocol: TCP
+      port: 30303
+    - protocol: UDP
+      port: 30303
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: besu
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: besu
+    ports:
+    - protocol: TCP
+      port: 30303
+    - protocol: UDP
+      port: 30303
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-metrics
+  namespace: besu
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: besu
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9545
+
+---
+apiVersion: policy/v1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-restricted
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-restricted
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'persistentVolumeClaim'
+    - 'secret'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: psp:besu-restricted
+  namespace: besu
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs:     ['use']
+  resourceNames:
+  - besu-restricted
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: psp:besu-restricted
+  namespace: besu
+roleRef:
+  kind: Role
+  name: psp:besu-restricted
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: besu-validator
+  namespace: besu
+- kind: ServiceAccount
+  name: besu-bootnode
+  namespace: besu
+- kind: ServiceAccount
+  name: besu-rpc
+  namespace: besu
+
+---
+apiVersion: audit.k8s.io/v1
+kind: Policy
+metadata:
+  name: besu-audit-policy
+spec:
+  rules:
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["pods", "services", "configmaps"]
+      namespaces: ["besu", "monitoring"]
+    - level: Metadata
+      resources:
+      - group: "networking.k8s.io"
+        resources: ["networkpolicies"]
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["secrets"]
+      namespaces: ["besu"]

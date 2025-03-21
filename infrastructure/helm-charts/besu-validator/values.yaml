@@ -1,0 +1,173 @@
+# Default values for besu-validator
+replicaCount: 3
+
+image:
+  repository: hyperledger/besu
+  tag: latest
+  pullPolicy: Always
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9545"
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+
+service:
+  type: ClusterIP
+  port: 8545
+  p2pPort: 30303
+  metricsPort: 9545
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  limits:
+    cpu: 4
+    memory: 8Gi
+  requests:
+    cpu: 2
+    memory: 4Gi
+
+persistence:
+  enabled: true
+  storageClass: "managed-premium"
+  size: 100Gi
+  accessMode: ReadWriteOnce
+
+nodeSelector:
+  nodepool: validator
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values:
+          - besu-validator
+      topologyKey: kubernetes.io/hostname
+
+besu:
+  network: "prod"
+  networkId: 1337
+  logging: INFO
+  
+  p2p:
+    enabled: true
+    host: "0.0.0.0"
+    port: 30303
+    discovery: true
+    maxPeers: 25
+    
+  rpc:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8545
+    apis: ["ETH", "NET", "WEB3"]
+    corsOrigins: ["*"]
+    
+  metrics:
+    enabled: true
+    host: "0.0.0.0"
+    port: 9545
+    
+  validator:
+    enabled: true
+    keystore: /opt/besu/keys
+    
+  genesisFile:
+    enabled: true
+    mountPath: /opt/besu/genesis.json
+    
+  extraArgs:
+    - --revert-reason-enabled
+    - --sync-mode=FULL
+    - --pruning-enabled=true
+    - --data-storage-format=BONSAI
+
+extraVolumes:
+  - name: validator-keys
+    secret:
+      secretName: besu-validator-keys
+  - name: genesis
+    configMap:
+      name: besu-genesis
+
+extraVolumeMounts:
+  - name: validator-keys
+    mountPath: /opt/besu/keys
+    readOnly: true
+  - name: genesis
+    mountPath: /opt/besu/genesis.json
+    subPath: genesis.json
+    readOnly: true
+
+livenessProbe:
+  httpGet:
+    path: /liveness
+    port: 8545
+  initialDelaySeconds: 60
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /readiness
+    port: 8545
+  initialDelaySeconds: 60
+  periodSeconds: 30
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: besu-bootnode
+      ports:
+        - port: 30303
+          protocol: TCP
+        - port: 30303
+          protocol: UDP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - port: 9545
+          protocol: TCP
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus-operator

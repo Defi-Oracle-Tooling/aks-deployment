@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "besu-validator.fullname" . }}
+  labels:
+    {{- include "besu-validator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "besu-validator.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow P2P communication between Besu nodes
+    - ports:
+        - port: {{ .Values.network.p2pPort }}
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: besu-network
+    # Allow Prometheus scraping
+    {{- if .Values.monitoring.enabled }}
+    - ports:
+        - port: {{ .Values.besu.metrics.port }}
+          protocol: TCP
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow P2P communication
+    - ports:
+        - port: {{ .Values.network.p2pPort }}
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: besu-network

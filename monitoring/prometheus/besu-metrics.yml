@@ -1,0 +1,183 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'besu-nodes'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ['besu']
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        regex: besu.*
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        target_label: role
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+      - source_labels: [__meta_kubernetes_pod_label_region]
+        target_label: region
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: besu_.*
+        action: keep
+
+  - job_name: 'besu-network'
+    static_configs:
+      - targets: ['localhost:9545']
+    metrics_path: /metrics
+    scheme: http
+    scrape_interval: 30s
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: besu_network_.*
+        action: keep
+
+  - job_name: 'node-metrics'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__meta_kubernetes_node_label_region]
+        target_label: region
+
+  - job_name: 'kube-state-metrics'
+    kubernetes_sd_configs:
+      - role: service
+        namespaces:
+          names: ['kube-system']
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+        regex: kube-state-metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_service_port_name]
+        regex: http-metrics
+        action: keep
+
+  - job_name: 'besu-validators'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - besu
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: besu-validator
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        regex: 'true'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_label_region]
+        target_label: region
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+        action: replace
+
+  - job_name: 'besu-bootnodes'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - besu
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: besu-bootnode
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        regex: 'true'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_label_region]
+        target_label: region
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+        action: replace
+
+  - job_name: 'besu-rpc'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - besu
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: besu-rpc
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        regex: 'true'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_label_region]
+        target_label: region
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+        action: replace
+
+alerting:
+  alertmanagers:
+    - kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names: ['monitoring']
+      scheme: http
+      timeout: 10s
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_label_app]
+          regex: alertmanager
+          action: keep
+        - source_labels: [__meta_kubernetes_pod_container_port_number]
+          regex: "9093"
+          action: keep
+
+rule_files:
+  - /etc/config/rules/*.yaml
+
+storage:
+  tsdb:
+    retention: 15d
+    retention.size: 45GB
+
+remote_write:
+  - url: ${REMOTE_WRITE_URL}
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'besu_.*'
+        action: keep

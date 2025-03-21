@@ -1,0 +1,61 @@
+{{ define "slack.title" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }}
+{{ end }}
+
+{{ define "slack.text" }}
+{{ range .Alerts }}
+*Alert:* {{ .Labels.alertname }}
+*Severity:* {{ .Labels.severity }}
+*Region:* {{ .Labels.region }}
+*Type:* {{ .Labels.type }}
+*Description:* {{ .Annotations.description }}
+*Details:*
+{{ range .Labels.SortedPairs }}
+  • {{ .Name }}: {{ .Value }}
+{{ end }}
+*Value:* {{ .ValueString }}
+*Started:* {{ .StartsAt | since }}
+{{ if .EndsAt }}*Ended:* {{ .EndsAt | since }}{{ end }}
+{{ end }}
+{{ end }}
+
+{{ define "opsgenie.message" }}
+[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} - {{ .CommonLabels.region }}
+{{ end }}
+
+{{ define "opsgenie.description" }}
+{{ range .Alerts }}
+Alert: {{ .Labels.alertname }}
+Severity: {{ .Labels.severity }}
+Region: {{ .Labels.region }}
+Type: {{ .Labels.type }}
+Description: {{ .Annotations.description }}
+
+Details:
+{{ range .Labels.SortedPairs }}
+- {{ .Name }}: {{ .Value }}
+{{ end }}
+
+Value: {{ .ValueString }}
+Started: {{ .StartsAt | since }}
+{{ if .EndsAt }}Ended: {{ .EndsAt | since }}{{ end }}
+
+{{ end }}
+{{ end }}
+
+{{ define "email.subject" }}
+[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} - {{ .CommonLabels.region }}
+{{ end }}
+
+{{ define "pagerduty.description" }}
+{{ range .Alerts }}
+{{ .Labels.alertname }} - {{ .Labels.region }}
+Severity: {{ .Labels.severity }}
+Type: {{ .Labels.type }}
+{{ .Annotations.description }}
+{{ end }}
+{{ end }}
+
+{{ define "pagerduty.client.url" }}
+https://grafana.company.com/d/besu-dashboard/besu-network-overview?orgId=1&var-region={{ .CommonLabels.region }}
+{{ end }}

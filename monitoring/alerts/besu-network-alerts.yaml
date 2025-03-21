@@ -1,0 +1,81 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: besu-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    release: prometheus
+spec:
+  groups:
+  - name: besu.rules
+    rules:
+    - alert: BesuNodeDown
+      expr: up{job="besu-validators"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        type: validator
+      annotations:
+        summary: "Besu node {{ $labels.pod }} is down"
+        description: "Validator node {{ $labels.pod }} in region {{ $labels.region }} has been down for more than 5 minutes"
+
+    - alert: BesuPeerCountLow
+      expr: besu_network_peer_count < 3
+      for: 5m
+      labels:
+        severity: warning
+        type: network
+      annotations:
+        summary: "Low peer count on {{ $labels.pod }}"
+        description: "Node {{ $labels.pod }} in region {{ $labels.region }} has less than 3 peers for more than 5 minutes"
+
+    - alert: BesuBlockHeightStuck
+      expr: rate(besu_blockchain_height[15m]) == 0
+      for: 5m
+      labels:
+        severity: critical
+        type: consensus
+      annotations:
+        summary: "Block height stuck on {{ $labels.pod }}"
+        description: "Node {{ $labels.pod }} in region {{ $labels.region }} block height hasn't increased in 15 minutes"
+
+    - alert: BesuHighMemoryUsage
+      expr: process_resident_memory_bytes / process_virtual_memory_bytes > 0.8
+      for: 15m
+      labels:
+        severity: warning
+        type: resource
+      annotations:
+        summary: "High memory usage on {{ $labels.pod }}"
+        description: "Node {{ $labels.pod }} in region {{ $labels.region }} memory usage is above 80% for 15 minutes"
+
+    - alert: BesuHighCPUUsage
+      expr: rate(process_cpu_seconds_total[5m]) > 0.9
+      for: 15m
+      labels:
+        severity: warning
+        type: resource
+      annotations:
+        summary: "High CPU usage on {{ $labels.pod }}"
+        description: "Node {{ $labels.pod }} in region {{ $labels.region }} CPU usage is above 90% for 15 minutes"
+
+    - alert: BesuSyncDelayed
+      expr: besu_synchronizer_block_height - besu_blockchain_height > 50
+      for: 10m
+      labels:
+        severity: warning
+        type: sync
+      annotations:
+        summary: "Sync delayed on {{ $labels.pod }}"
+        description: "Node {{ $labels.pod }} in region {{ $labels.region }} is more than 50 blocks behind the network"
+
+    - alert: BesuNetworkPartition
+      expr: count(count by (region) (up{job="besu-validators"} == 1)) < 2
+      for: 5m
+      labels:
+        severity: critical
+        type: network
+      annotations:
+        summary: "Network partition detected"
+        description: "Less than 2 regions have active validators, possible network partition"

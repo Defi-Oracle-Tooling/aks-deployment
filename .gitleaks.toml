@@ -1,0 +1,47 @@
+[allowlist]
+paths = [
+    '''.*test.*''',
+    '''(.*?)(jpg|gif|doc|docx|zip|xls|pdf|bin|svg|socket)$''',
+]
+
+[rules]
+    [rules.azure-storage-key]
+    description = "Azure Storage Key"
+    regex = '''(?i)["'](?P<key>[A-Za-z0-9/+]{86}==)["']'''
+    keywords = ["storage", "account", "key"]
+    
+    [rules.azure-connection-string]
+    description = "Azure Connection String"
+    regex = '''(?i)(DefaultEndpointsProtocol|AccountName|AccountKey|EndpointSuffix)=[^;]+;'''
+    keywords = ["connection", "string"]
+    
+    [rules.besu-node-key]
+    description = "Besu Node Key"
+    regex = '''(?i)["'](?P<key>[0-9a-f]{64})["']'''
+    keywords = ["nodekey", "node_key", "nodeKey"]
+    
+    [rules.besu-enode-url]
+    description = "Besu Enode URL"
+    regex = '''(?i)enode://[0-9a-f]{128}@[^\s"']+'''
+    keywords = ["enode"]
+    
+    [rules.jwt-token]
+    description = "JWT Token"
+    regex = '''(?i)["'](?P<key>ey[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*)["']'''
+    keywords = ["jwt", "token"]
+
+[whitelist]
+    regexes = [
+        # Test data
+        '''(?i)["']EXAMPLE-KEY-[A-Za-z0-9]{10}["']''',
+        # Documentation examples
+        '''(?i)enode://123...@localhost''',
+    ]
+    files = [
+        "(.*?)(\.md|\.txt|\.example)$",
+        "(.*?)(test|example)/.*"
+    ]
+    commits = [
+        # Initial commit with example configurations
+        "1234567890abcdef",
+    ]

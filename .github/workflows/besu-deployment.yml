@@ -1,0 +1,146 @@
+name: Besu Network Deployment
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+      regions:
+        description: 'Comma-separated list of regions to deploy to'
+        required: false
+
+env:
+  TERRAFORM_VERSION: '1.5.0'
+  HELM_VERSION: '3.12.0'
+  KUBECTL_VERSION: '1.26.0'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+      
+      - name: Helm Lint
+        run: |
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+          chmod 700 get_helm.sh
+          ./get_helm.sh --version ${{ env.HELM_VERSION }}
+          helm lint ./infrastructure/helm-charts/besu-validator
+
+  security-scan:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  deploy-infrastructure:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      
+      - name: Terraform Init
+        run: |
+          cd infrastructure/terraform
+          terraform init
+      
+      - name: Terraform Plan
+        run: |
+          cd infrastructure/terraform
+          terraform plan -var-file="environments/${{ github.event.inputs.environment }}.tfvars"
+      
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd infrastructure/terraform
+          terraform apply -auto-approve -var-file="environments/${{ github.event.inputs.environment }}.tfvars"
+
+  deploy-besu:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+      
+      - name: Install Helm
+        run: |
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+          chmod 700 get_helm.sh
+          ./get_helm.sh --version ${{ env.HELM_VERSION }}
+      
+      - name: Deploy Besu Network
+        run: |
+          chmod +x scripts/deployment/deploy-besu.sh
+          ./scripts/deployment/deploy-besu.sh \
+            --environment ${{ github.event.inputs.environment }} \
+            --regions ${{ github.event.inputs.regions || 'all' }}
+
+  verify:
+    needs: deploy-besu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Verify Deployment
+        run: |
+          chmod +x scripts/deployment/verify-deployment.sh
+          ./scripts/deployment/verify-deployment.sh
+
+  monitoring:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Monitoring Stack
+        run: |
+          chmod +x scripts/deployment/setup-monitoring.sh
+          ./scripts/deployment/setup-monitoring.sh
+      
+      - name: Verify Metrics
+        run: |
+          chmod +x scripts/deployment/verify-metrics.sh
+          ./scripts/deployment/verify-metrics.sh
