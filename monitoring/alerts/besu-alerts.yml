@@ -101,40 +101,156 @@ templates:
   - '/etc/alertmanager/templates/*.tmpl'
 
 groups:
-- name: besu-network-alerts
-  rules:
-  - alert: BesuNodeDown
-    expr: up{job="besu-nodes"} == 0
-    for: 5m
-    labels:
-      severity: critical
-    annotations:
-      summary: "Besu node is down"
-      description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
+  - name: besu-network-alerts
+    rules:
+      - alert: BesuNodeDown
+        expr: up{job="besu-nodes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Besu node is down"
+          description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
 
-  - alert: LowPeerCount
-    expr: besu_peers < 3
-    for: 10m
-    labels:
-      severity: warning
-    annotations:
-      summary: "Low peer count"
-      description: "Node {{ $labels.instance }} has less than 3 peers"
+      - alert: LowPeerCount
+        expr: besu_peers < 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low peer count"
+          description: "Node {{ $labels.instance }} has less than 3 peers"
 
-  - alert: BlockchainNotSyncing
-    expr: rate(besu_blockchain_height[15m]) == 0
-    for: 15m
-    labels:
-      severity: critical
-    annotations:
-      summary: "Blockchain not syncing"
-      description: "Node {{ $labels.instance }} blockchain height has not increased in 15 minutes"
+      - alert: BlockchainNotSyncing
+        expr: rate(besu_blockchain_height[15m]) == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blockchain not syncing"
+          description: "Node {{ $labels.instance }} blockchain height has not increased in 15 minutes"
 
-  - alert: HighTransactionPoolSize
-    expr: besu_transaction_pool_transactions > 1000
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "High transaction pool size"
-      description: "Node {{ $labels.instance }} transaction pool size is high"
+      - alert: HighTransactionPoolSize
+        expr: besu_transaction_pool_transactions > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High transaction pool size"
+          description: "Node {{ $labels.instance }} transaction pool size is high"
+
+  - name: besu-mainnet
+    rules:
+      - alert: MainnetNodeDown
+        expr: up{chain_id="138"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          network: mainnet
+        annotations:
+          summary: "Besu Mainnet node is down"
+          description: "Node {{ $labels.instance }} has been down for more than 2 minutes"
+
+      - alert: MainnetBlockHeightStuck
+        expr: rate(besu_blockchain_height{chain_id="138"}[15m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          network: mainnet
+        annotations:
+          summary: "Mainnet block height is not increasing"
+          description: "Block height has not increased in the last 5 minutes"
+
+      - alert: MainnetPeerCountLow
+        expr: besu_network_peer_count{chain_id="138"} < 10
+        for: 5m
+        labels:
+          severity: warning
+          network: mainnet
+        annotations:
+          summary: "Mainnet peer count is low"
+          description: "Node has less than 10 peers for more than 5 minutes"
+
+      - alert: MainnetHighMemoryUsage
+        expr: process_resident_memory_bytes{chain_id="138"} > 31457280000
+        for: 10m
+        labels:
+          severity: warning
+          network: mainnet
+        annotations:
+          summary: "High memory usage on mainnet node"
+          description: "Node memory usage is above 30GB for more than 10 minutes"
+
+  - name: besu-testnet
+    rules:
+      - alert: TestnetNodeDown
+        expr: up{chain_id="2138"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          network: testnet
+        annotations:
+          summary: "Besu Testnet node is down"
+          description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
+
+      - alert: TestnetBlockHeightStuck
+        expr: rate(besu_blockchain_height{chain_id="2138"}[15m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          network: testnet
+        annotations:
+          summary: "Testnet block height is not increasing"
+          description: "Block height has not increased in the last 10 minutes"
+
+      - alert: TestnetPeerCountLow
+        expr: besu_network_peer_count{chain_id="2138"} < 5
+        for: 10m
+        labels:
+          severity: warning
+          network: testnet
+        annotations:
+          summary: "Testnet peer count is low"
+          description: "Node has less than 5 peers for more than 10 minutes"
+
+      - alert: TestnetHighMemoryUsage
+        expr: process_resident_memory_bytes{chain_id="2138"} > 15728640000
+        for: 15m
+        labels:
+          severity: warning
+          network: testnet
+        annotations:
+          summary: "High memory usage on testnet node"
+          description: "Node memory usage is above 15GB for more than 15 minutes"
+
+  - name: besu-devnet
+    rules:
+      - alert: DevnetNodeDown
+        expr: up{chain_id="1337"} == 0
+        for: 10m
+        labels:
+          severity: info
+          network: devnet
+        annotations:
+          summary: "Besu Devnet node is down"
+          description: "Node {{ $labels.instance }} has been down for more than 10 minutes"
+
+      - alert: DevnetBlockHeightStuck
+        expr: rate(besu_blockchain_height{chain_id="1337"}[15m]) == 0
+        for: 15m
+        labels:
+          severity: info
+          network: devnet
+        annotations:
+          summary: "Devnet block height is not increasing"
+          description: "Block height has not increased in the last 15 minutes"
+
+      - alert: DevnetHighMemoryUsage
+        expr: process_resident_memory_bytes{chain_id="1337"} > 7864320000
+        for: 20m
+        labels:
+          severity: info
+          network: devnet
+        annotations:
+          summary: "High memory usage on devnet node"
+          description: "Node memory usage is above 7.5GB for more than 20 minutes"

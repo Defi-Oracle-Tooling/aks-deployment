@@ -116,3 +116,65 @@ variable "alerts" {
     peer_count_min    = 3
   }
 }
+
+variable "network_type" {
+  description = "The type of network to deploy (mainnet, testnet, or devnet)"
+  type        = string
+  default     = "mainnet"
+}
+
+variable "chain_id" {
+  description = "The Chain ID for the network (138 for mainnet, 2138 for testnet, 1337 for devnet)"
+  type        = map(number)
+  default = {
+    mainnet = 138
+    testnet = 2138
+    devnet  = 1337
+  }
+}
+
+variable "network_name" {
+  description = "The name of the network"
+  type        = map(string)
+  default = {
+    mainnet = "Defi Oracle Meta Mainnet"
+    testnet = "Defi Oracle Meta Testnet"
+    devnet  = "Defi Oracle Meta Devnet"
+  }
+}
+
+variable "vm_sizes" {
+  description = "VM sizes for different node types in each network"
+  type = map(object({
+    validator = string
+    bootnode  = string
+    rpc       = string
+  }))
+  default = {
+    mainnet = {
+      validator = "Standard_D16s_v4"
+      bootnode  = "Standard_E16s_v4"
+      rpc       = "Standard_E16s_v5"
+    }
+    testnet = {
+      validator = "Standard_D8s_v4"
+      bootnode  = "Standard_E8s_v4"
+      rpc       = "Standard_F8s_v2"
+    }
+    devnet = {
+      validator = "Standard_B4ms"
+      bootnode  = "Standard_B4ms"
+      rpc       = "Standard_B4ms"
+    }
+  }
+}
+
+variable "min_nodes" {
+  description = "Minimum number of nodes required for each network type"
+  type        = map(number)
+  default     = {
+    mainnet = 7
+    testnet = 4
+    devnet  = 1
+  }
+}

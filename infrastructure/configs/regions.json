@@ -1,0 +1,153 @@
+{
+  "regions": [
+    {
+      "name": "australiacentral",
+      "displayName": "Australia Central",
+      "enabled": true
+    },
+    {
+      "name": "australiaeast",
+      "displayName": "Australia East",
+      "enabled": true
+    },
+    {
+      "name": "australiasoutheast",
+      "displayName": "Australia Southeast",
+      "enabled": true
+    },
+    {
+      "name": "brazilsouth",
+      "displayName": "Brazil South",
+      "enabled": true
+    },
+    {
+      "name": "canadacentral",
+      "displayName": "Canada Central",
+      "enabled": true
+    },
+    {
+      "name": "centralindia",
+      "displayName": "Central India",
+      "enabled": true
+    },
+    {
+      "name": "eastasia",
+      "displayName": "East Asia",
+      "enabled": true
+    },
+    {
+      "name": "francecentral",
+      "displayName": "France Central",
+      "enabled": true
+    },
+    {
+      "name": "germanywestcentral",
+      "displayName": "Germany West Central",
+      "enabled": true
+    },
+    {
+      "name": "israelcentral",
+      "displayName": "Israel Central",
+      "enabled": true
+    },
+    {
+      "name": "italynorth",
+      "displayName": "Italy North",
+      "enabled": true
+    },
+    {
+      "name": "japaneast",
+      "displayName": "Japan East",
+      "enabled": true
+    },
+    {
+      "name": "japanwest",
+      "displayName": "Japan West",
+      "enabled": true
+    },
+    {
+      "name": "koreacentral",
+      "displayName": "Korea Central",
+      "enabled": true
+    },
+    {
+      "name": "mexicocentral",
+      "displayName": "Mexico Central",
+      "enabled": true
+    },
+    {
+      "name": "newzealandnorth",
+      "displayName": "New Zealand North",
+      "enabled": true
+    },
+    {
+      "name": "northeurope",
+      "displayName": "North Europe",
+      "enabled": true
+    },
+    {
+      "name": "norwayeast",
+      "displayName": "Norway East",
+      "enabled": true
+    },
+    {
+      "name": "polandcentral",
+      "displayName": "Poland Central",
+      "enabled": true
+    },
+    {
+      "name": "southafricanorth",
+      "displayName": "South Africa North",
+      "enabled": true
+    },
+    {
+      "name": "southindia",
+      "displayName": "South India",
+      "enabled": true
+    },
+    {
+      "name": "southeastasia",
+      "displayName": "Southeast Asia",
+      "enabled": true
+    },
+    {
+      "name": "spaincentral",
+      "displayName": "Spain Central",
+      "enabled": true
+    },
+    {
+      "name": "swedencentral",
+      "displayName": "Sweden Central",
+      "enabled": true
+    },
+    {
+      "name": "switzerlandnorth",
+      "displayName": "Switzerland North",
+      "enabled": true
+    },
+    {
+      "name": "uaenorth",
+      "displayName": "UAE North",
+      "enabled": true
+    },
+    {
+      "name": "uksouth",
+      "displayName": "UK South",
+      "enabled": true
+    },
+    {
+      "name": "ukwest",
+      "displayName": "UK West",
+      "enabled": true
+    },
+    {
+      "name": "westeurope",
+      "displayName": "West Europe",
+      "enabled": true
+    }
+  ],
+  "metadata": {
+    "lastUpdated": "2025-03-22",
+    "version": "1.0"
+  }
+}

@@ -79,3 +79,136 @@ spec:
       annotations:
         summary: "Network partition detected"
         description: "Less than 2 regions have active validators, possible network partition"
+
+  - name: besu-network-alerts
+    rules:
+    # Mainnet Alerts (Chain ID: 138)
+    - alert: MainnetNodeDown
+      expr: up{chain_id="138"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        network: mainnet
+      annotations:
+        summary: "Mainnet Node Down"
+        description: "Node {{ $labels.instance }} has been down for more than 2 minutes"
+
+    - alert: MainnetHighCPUUsage
+      expr: rate(process_cpu_seconds_total{chain_id="138"}[5m]) * 100 > 85
+      for: 10m
+      labels:
+        severity: warning
+        network: mainnet
+      annotations:
+        summary: "High CPU Usage on Mainnet Node"
+        description: "Node {{ $labels.instance }} CPU usage is above 85% for 10 minutes"
+
+    - alert: MainnetLowPeerCount
+      expr: besu_peers{chain_id="138"} < 10
+      for: 5m
+      labels:
+        severity: warning
+        network: mainnet
+      annotations:
+        summary: "Low Peer Count on Mainnet"
+        description: "Node {{ $labels.instance }} has less than 10 peers"
+
+    # Testnet Alerts (Chain ID: 2138)
+    - alert: TestnetNodeDown
+      expr: up{chain_id="2138"} == 0
+      for: 5m
+      labels:
+        severity: warning
+        network: testnet
+      annotations:
+        summary: "Testnet Node Down"
+        description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
+
+    - alert: TestnetHighCPUUsage
+      expr: rate(process_cpu_seconds_total{chain_id="2138"}[5m]) * 100 > 90
+      for: 15m
+      labels:
+        severity: warning
+        network: testnet
+      annotations:
+        summary: "High CPU Usage on Testnet Node"
+        description: "Node {{ $labels.instance }} CPU usage is above 90% for 15 minutes"
+
+    - alert: TestnetLowPeerCount
+      expr: besu_peers{chain_id="2138"} < 5
+      for: 10m
+      labels:
+        severity: warning
+        network: testnet
+      annotations:
+        summary: "Low Peer Count on Testnet"
+        description: "Node {{ $labels.instance }} has less than 5 peers"
+
+    # Devnet Alerts (Chain ID: 1337)
+    - alert: DevnetNodeDown
+      expr: up{chain_id="1337"} == 0
+      for: 10m
+      labels:
+        severity: info
+        network: devnet
+      annotations:
+        summary: "Devnet Node Down"
+        description: "Node {{ $labels.instance }} has been down for more than 10 minutes"
+
+    - alert: DevnetHighCPUUsage
+      expr: rate(process_cpu_seconds_total{chain_id="1337"}[5m]) * 100 > 95
+      for: 30m
+      labels:
+        severity: info
+        network: devnet
+      annotations:
+        summary: "High CPU Usage on Devnet Node"
+        description: "Node {{ $labels.instance }} CPU usage is above 95% for 30 minutes"
+
+    # Common Storage Alerts
+    - alert: StorageNearingCapacity
+      expr: |
+        (
+          kubelet_volume_stats_used_bytes{chain_id="138"}
+          / kubelet_volume_stats_capacity_bytes{chain_id="138"}
+          * 100 > 80
+        )
+        or
+        (
+          kubelet_volume_stats_used_bytes{chain_id="2138"}
+          / kubelet_volume_stats_capacity_bytes{chain_id="2138"}
+          * 100 > 85
+        )
+        or
+        (
+          kubelet_volume_stats_used_bytes{chain_id="1337"}
+          / kubelet_volume_stats_capacity_bytes{chain_id="1337"}
+          * 100 > 90
+        )
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "Storage Capacity Alert"
+        description: "Volume {{ $labels.persistentvolumeclaim }} is nearing capacity threshold for its network type"
+
+    # Network-Specific Block Sync Alerts
+    - alert: MainnetBlockSyncDelay
+      expr: increase(besu_blockchain_height{chain_id="138"}[1h]) < 10
+      for: 10m
+      labels:
+        severity: critical
+        network: mainnet
+      annotations:
+        summary: "Mainnet Block Sync Delay"
+        description: "Node {{ $labels.instance }} block sync is delayed"
+
+    - alert: TestnetBlockSyncDelay
+      expr: increase(besu_blockchain_height{chain_id="2138"}[1h]) < 5
+      for: 15m
+      labels:
+        severity: warning
+        network: testnet
+      annotations:
+        summary: "Testnet Block Sync Delay"
+        description: "Node {{ $labels.instance }} block sync is delayed"

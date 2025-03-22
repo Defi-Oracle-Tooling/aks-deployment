@@ -1,5 +1,7 @@
 package kubernetes
 
+import data.common
+
 # Container security context validations
 container = input.spec.containers[_]
 
@@ -108,6 +110,127 @@ besu_node_validations[msg] {
     input.metadata.labels.app == "besu-validator"
     not input.spec.template.spec.containers[_].resources.limits.memory
     msg = "Besu validator nodes must have memory limits defined"
+}
+
+# Network-specific validations
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    not input.spec.securityContext.runAsNonRoot
+
+    msg := "Mainnet pods must run as non-root user"
+}
+
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    not input.spec.securityContext.readOnlyRootFilesystem
+
+    msg := "Mainnet pods must have read-only root filesystem"
+}
+
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    container := input.spec.containers[_]
+    not container.resources.limits
+
+    msg := sprintf("Mainnet container '%v' must have resource limits", [container.name])
+}
+
+# Testnet specific rules - less strict
+warn[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "testnet"
+    not input.spec.securityContext.runAsNonRoot
+
+    msg := "Warning: Consider running testnet pods as non-root"
+}
+
+# Common validations across all networks
+deny[msg] {
+    input.kind == "Pod"
+    container := input.spec.containers[_]
+    not container.securityContext.allowPrivilegeEscalation == false
+
+    msg := sprintf("Container '%v' must not allow privilege escalation", [container.name])
+}
+
+# Network-specific resource quotas
+deny[msg] {
+    input.kind == "ResourceQuota"
+    input.metadata.labels.network_type == "mainnet"
+    not input.spec.hard["limits.cpu"]
+
+    msg := "Mainnet namespaces must have CPU limits defined"
+}
+
+# Network-specific pod security rules
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    container := input.spec.containers[_]
+    not container.securityContext.runAsNonRoot
+
+    msg := sprintf("Mainnet pods must run as non-root user: %v", [container.name])
+}
+
+# Network-specific resource requirements
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    container := input.spec.containers[_]
+    not container.resources.limits
+
+    msg := sprintf("Mainnet containers must have resource limits defined: %v", [container.name])
+}
+
+# Network-specific liveness probe requirements
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    container := input.spec.containers[_]
+    not container.livenessProbe
+
+    msg := sprintf("Mainnet containers must have liveness probes: %v", [container.name])
+}
+
+# Network-specific network policy requirements
+deny[msg] {
+    input.kind == "NetworkPolicy"
+    input.metadata.labels.network_type == "mainnet"
+    not input.spec.ingress
+
+    msg := "Mainnet network policies must explicitly define ingress rules"
+}
+
+# Testnet-specific rules - less strict
+warn[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "testnet"
+    container := input.spec.containers[_]
+    not container.securityContext.runAsNonRoot
+
+    msg := sprintf("Warning: Consider running testnet containers as non-root: %v", [container.name])
+}
+
+# Network-specific service account requirements
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    not input.spec.serviceAccountName
+
+    msg := "Mainnet pods must use explicit service accounts"
+}
+
+# Network-specific readiness probe requirements
+deny[msg] {
+    input.kind == "Pod"
+    input.metadata.labels.network_type == "mainnet"
+    container := input.spec.containers[_]
+    not container.readinessProbe
+
+    msg := sprintf("Mainnet containers must have readiness probes: %v", [container.name])
 }
 
 # Aggregate all validations

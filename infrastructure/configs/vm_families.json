@@ -1,0 +1,169 @@
+{
+  "version": "2.0",
+  "defaultFamily": "standardDSv4Family",
+  "vmFamilyDefinitions": {
+    "standardDSv4Family": {
+      "tier": "standard",
+      "family": "Dsv4",
+      "capabilities": {
+        "acceleratedNetworking": true,
+        "premiumStorage": true,
+        "tempDisk": true
+      },
+      "characteristics": {
+        "cpu": "AMD EPYC 7452",
+        "memoryPerVCPU": "4GiB",
+        "maxIOPS": 60000
+      },
+      "costOptimization": {
+        "spotEligible": true,
+        "reservationSupported": true,
+        "hybridBenefitEligible": true
+      }
+    },
+    "standardESv4Family": {
+      "tier": "standard",
+      "family": "Esv4",
+      "capabilities": {
+        "acceleratedNetworking": true,
+        "premiumStorage": true,
+        "tempDisk": true
+      },
+      "characteristics": {
+        "cpu": "AMD EPYC 7452",
+        "memoryPerVCPU": "8GiB",
+        "maxIOPS": 80000
+      },
+      "costOptimization": {
+        "spotEligible": true,
+        "reservationSupported": true,
+        "hybridBenefitEligible": true
+      }
+    },
+    "standardESv5Family": {
+      "tier": "standard",
+      "family": "Esv5",
+      "capabilities": {
+        "acceleratedNetworking": true,
+        "premiumStorage": true,
+        "tempDisk": true
+      },
+      "characteristics": {
+        "cpu": "AMD EPYC 7763v",
+        "memoryPerVCPU": "8GiB",
+        "maxIOPS": 100000
+      },
+      "costOptimization": {
+        "spotEligible": true,
+        "reservationSupported": true,
+        "hybridBenefitEligible": true
+      }
+    }
+  },
+  "environments": {
+    "mainnet": {
+      "chainId": 138,
+      "networkName": "Defi Oracle Meta Mainnet",
+      "autoscaling": {
+        "enabled": true,
+        "minReplicas": 3,
+        "maxReplicas": 10,
+        "targetCPUUtilization": 75,
+        "targetMemoryUtilization": 80
+      },
+      "nodeTypes": {
+        "validator": {
+          "vmFamily": "standardDSv4Family",
+          "priority": 1,
+          "requirements": {
+            "minVCPUs": 24,
+            "memory": "32Gi",
+            "storage": "512Gi",
+            "network": "premium"
+          },
+          "scaling": {
+            "minNodes": 3,
+            "maxNodes": 5
+          }
+        },
+        "bootnode": {
+          "vmFamily": "standardESv4Family",
+          "priority": 2,
+          "requirements": {
+            "minVCPUs": 16,
+            "memory": "64Gi",
+            "storage": "1Ti",
+            "network": "premium"
+          },
+          "scaling": {
+            "minNodes": 2,
+            "maxNodes": 4
+          }
+        },
+        "rpc": {
+          "vmFamily": "standardESv5Family",
+          "priority": 3,
+          "requirements": {
+            "minVCPUs": 16,
+            "memory": "64Gi",
+            "storage": "2Ti",
+            "network": "premium"
+          },
+          "scaling": {
+            "minNodes": 2,
+            "maxNodes": 8
+          }
+        }
+      }
+    },
+    "testnet": {
+      "chainId": 2138,
+      "networkName": "Defi Oracle Meta Testnet",
+      "autoscaling": {
+        "enabled": true,
+        "minReplicas": 2,
+        "maxReplicas": 6,
+        "targetCPUUtilization": 70,
+        "targetMemoryUtilization": 75
+      },
+      "nodeTypes": {
+        "validator": {
+          "vmFamily": "standardESv4Family",
+          "priority": 1,
+          "requirements": {
+            "minVCPUs": 8,
+            "memory": "16Gi",
+            "storage": "256Gi",
+            "network": "standard"
+          },
+          "scaling": {
+            "minNodes": 2,
+            "maxNodes": 3
+          }
+        }
+      }
+    }
+  },
+  "metadata": {
+    "lastUpdated": "2025-03-22",
+    "version": "1.0",
+    "description": "VM family configurations for Defi Oracle Meta networks",
+    "networks": {
+      "mainnet": {
+        "chainId": 138,
+        "networkType": "production",
+        "minNodes": 7
+      },
+      "testnet": {
+        "chainId": 2138,
+        "networkType": "testing",
+        "minNodes": 4
+      },
+      "devnet": {
+        "chainId": 1337,
+        "networkType": "development",
+        "minNodes": 1
+      }
+    }
+  }
+}

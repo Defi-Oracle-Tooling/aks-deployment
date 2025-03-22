@@ -171,3 +171,126 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus-operator
+
+networks:
+  mainnet:
+    chainId: 138
+    networkName: "Defi Oracle Meta Mainnet"
+    bootNodes:
+      resources:
+        requests:
+          memory: "64Gi"
+          cpu: "16"
+        limits:
+          memory: "64Gi"
+          cpu: "16"
+      storage:
+        size: "1Ti"
+        class: "premium-ssd"
+    validators:
+      resources:
+        requests:
+          memory: "32Gi"
+          cpu: "24"
+        limits:
+          memory: "32Gi"
+          cpu: "24"
+      storage:
+        size: "512Gi"
+        class: "premium-ssd"
+    rpcNodes:
+      resources:
+        requests:
+          memory: "64Gi"
+          cpu: "16"
+        limits:
+          memory: "64Gi"
+          cpu: "16"
+      storage:
+        size: "2Ti"
+        class: "premium-ssd"
+
+  testnet:
+    chainId: 2138
+    networkName: "Defi Oracle Meta Testnet"
+    bootNodes:
+      resources:
+        requests:
+          memory: "32Gi"
+          cpu: "8"
+        limits:
+          memory: "32Gi"
+          cpu: "8"
+      storage:
+        size: "512Gi"
+        class: "standard-ssd"
+    validators:
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "8"
+        limits:
+          memory: "16Gi"
+          cpu: "8"
+      storage:
+        size: "256Gi"
+        class: "standard-ssd"
+    rpcNodes:
+      resources:
+        requests:
+          memory: "32Gi"
+          cpu: "8"
+        limits:
+          memory: "32Gi"
+          cpu: "8"
+      storage:
+        size: "512Gi"
+        class: "standard-ssd"
+
+  devnet:
+    chainId: 1337
+    networkName: "Defi Oracle Meta Devnet"
+    bootNodes:
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "4"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
+      storage:
+        size: "128Gi"
+        class: "standard-ssd"
+    validators:
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "4"
+        limits:
+          memory: "16Gi"
+          cpu: "4"
+      storage:
+        size: "256Gi"
+        class: "standard-ssd"
+    rpcNodes:
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "4"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
+      storage:
+        size: "128Gi"
+        class: "standard-ssd"
+
+# Common configurations across all networks
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true

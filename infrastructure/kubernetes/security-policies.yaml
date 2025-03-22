@@ -214,3 +214,435 @@ spec:
       - group: ""
         resources: ["secrets"]
       namespaces: ["besu"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: require-network-labels
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+  parameters:
+    labels:
+      - key: network.besu.hyperledger.org/chainId
+        allowedRegex: "^(138|2138|1337)$"
+      - key: network.besu.hyperledger.org/name
+        allowedRegex: "^(Defi Oracle Meta Mainnet|Defi Oracle Meta Testnet|Defi Oracle Meta Devnet)$"
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRestrictedPSP
+metadata:
+  name: restricted-psp-by-network
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    labelSelector:
+      matchExpressions:
+        - key: network.besu.hyperledger.org/chainId
+          operator: In
+          values: ["138", "2138", "1337"]
+  parameters:
+    privileged:
+      rule: "equals"
+      value: false
+    allowPrivilegeEscalation:
+      rule: "equals"
+      value: false
+    volumes:
+      # Mainnet (138) - more restricted
+      - matchLabels:
+          network.besu.hyperledger.org/chainId: "138"
+        allowed: ["configMap", "emptyDir", "persistentVolumeClaim", "secret"]
+      # Testnet (2138) - less restricted
+      - matchLabels:
+          network.besu.hyperledger.org/chainId: "2138"
+        allowed: ["configMap", "emptyDir", "persistentVolumeClaim", "secret", "hostPath"]
+      # Devnet (1337) - least restricted
+      - matchLabels:
+          network.besu.hyperledger.org/chainId: "1337"
+        allowed: ["configMap", "emptyDir", "persistentVolumeClaim", "secret", "hostPath", "projected"]
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: network-policy-by-chain
+spec:
+  podSelector:
+    matchLabels:
+      network.besu.hyperledger.org/chainId: "138"  # Mainnet
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              network.besu.hyperledger.org/chainId: "138"
+    - ports:
+        - port: 8545  # RPC
+        - port: 30303 # P2P
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              network.besu.hyperledger.org/chainId: "138"
+    - ports:
+        - port: 8545
+        - port: 30303
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: testnet-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      network.besu.hyperledger.org/chainId: "2138"  # Testnet
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              network.besu.hyperledger.org/chainId: "2138"
+    - ports:
+        - port: 8545
+        - port: 30303
+  egress:
+    - {}  # Allow all egress for testnet
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: devnet-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      network.besu.hyperledger.org/chainId: "1337"  # Devnet
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}  # Allow all ingress for devnet
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: besu-mainnet-policy
+  namespace: besu
+spec:
+  podSelector:
+    matchLabels:
+      network: mainnet
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              network: mainnet
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+    ports:
+      - port: 8545
+      - port: 8546
+      - port: 30303
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              network: mainnet
+    ports:
+      - port: 30303
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: besu-testnet-policy
+  namespace: besu
+spec:
+  podSelector:
+    matchLabels:
+      network: testnet
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              network: testnet
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+    ports:
+      - port: 8545
+      - port: 8546
+      - port: 30303
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              network: testnet
+    ports:
+      - port: 30303
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: besu-devnet-policy
+  namespace: besu
+spec:
+  podSelector:
+    matchLabels:
+      network: devnet
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              network: devnet
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+    ports:
+      - port: 8545
+      - port: 8546
+      - port: 30303
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              network: devnet
+    ports:
+      - port: 30303
+
+---
+apiVersion: policy/v1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-mainnet-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'persistentVolumeClaim'
+    - 'secret'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+
+---
+apiVersion: policy/v1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-testnet-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'persistentVolumeClaim'
+    - 'secret'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'RunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+
+---
+apiVersion: policy/v1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-devnet-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default,docker/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  volumes:
+    - '*'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: besu-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: besu-validator
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: besu-validator
+    ports:
+    - protocol: TCP
+      port: 30303
+    - protocol: UDP
+      port: 30303
+    - protocol: TCP
+      port: 8545
+    - protocol: TCP
+      port: 8546
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: besu-validator
+    ports:
+    - protocol: TCP
+      port: 30303
+    - protocol: UDP
+      port: 30303
+
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-mainnet-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'persistentVolumeClaim'
+    - 'secret'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-testnet-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'persistentVolumeClaim'
+    - 'secret'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: false
+
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: besu-devnet-psp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  volumes:
+    - '*'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: false

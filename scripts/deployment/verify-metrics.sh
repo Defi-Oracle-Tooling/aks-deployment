@@ -649,3 +649,250 @@ cleanup() {
 
 # Set trap for cleanup on script exit
 trap cleanup EXIT
+
+#!/bin/bash
+
+# Set project root
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
+
+# Source deployment utilities
+source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+
+# Parse command line arguments
+usage() {
+    echo "Usage: $0 [--network <mainnet|testnet|devnet>] [--region <region-name>]"
+    echo "Default network: mainnet"
+    exit 1
+}
+
+NETWORK="mainnet"
+REGION=""
+
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        --network)
+            NETWORK="$2"
+            shift
+            shift
+            ;;
+        --region)
+            REGION="$2"
+            shift
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
+    esac
+done
+
+# Load network-specific metric requirements
+case $NETWORK in
+    "mainnet")
+        CHAIN_ID=138
+        REQUIRED_METRICS=(
+            "besu_blockchain_height"
+            "besu_network_peer_count"
+            "besu_synchronizer_block_height"
+            "besu_transaction_pool_transactions"
+            "besu_network_discovery_peer_count"
+            "besu_network_peer_limit"
+            "process_cpu_seconds_total"
+            "process_resident_memory_bytes"
+        )
+        MIN_SCRAPE_INTERVAL=10
+        ;;
+    "testnet")
+        CHAIN_ID=2138
+        REQUIRED_METRICS=(
+            "besu_blockchain_height"
+            "besu_network_peer_count"
+            "besu_synchronizer_block_height"
+            "process_cpu_seconds_total"
+            "process_resident_memory_bytes"
+        )
+        MIN_SCRAPE_INTERVAL=30
+        ;;
+    "devnet")
+        CHAIN_ID=1337
+        REQUIRED_METRICS=(
+            "besu_blockchain_height"
+            "besu_network_peer_count"
+            "process_cpu_seconds_total"
+        )
+        MIN_SCRAPE_INTERVAL=60
+        ;;
+    *)
+        echo "Error: Invalid network type"
+        exit 1
+        ;;
+esac
+
+# Function to verify Prometheus metrics collection
+verify_prometheus_metrics() {
+    local region=$1
+    echo "Verifying Prometheus metrics for $NETWORK in $region..."
+    local failures=0
+
+    # Get Prometheus pod
+    PROM_POD=$(kubectl get pod -n monitoring -l app=prometheus -o jsonpath='{.items[0].metadata.name}')
+    
+    # Check each required metric
+    for metric in "${REQUIRED_METRICS[@]}"; do
+        echo "Checking metric: $metric"
+        
+        # Query Prometheus for the metric
+        RESULT=$(kubectl exec -n monitoring $PROM_POD -c prometheus -- curl -s "localhost:9090/api/v1/query" --data-urlencode "query=$metric{chain_id=\"$CHAIN_ID\"}")
+        
+        if ! echo "$RESULT" | jq -e '.data.result[0]' > /dev/null; then
+            echo "❌ Metric $metric not found"
+            ((failures++))
+        else
+            echo "✅ Metric $metric verified"
+        fi
+    done
+
+    # Verify scrape interval
+    ACTUAL_INTERVAL=$(kubectl get cm -n monitoring prometheus-config -o jsonpath="{.data.prometheus\.yml}" | \
+        yq eval ".scrape_configs[] | select(.job_name == \"besu-$NETWORK\").scrape_interval" -)
+    
+    ACTUAL_SECONDS=$(echo $ACTUAL_INTERVAL | sed 's/s//')
+    if [ "$ACTUAL_SECONDS" -gt "$MIN_SCRAPE_INTERVAL" ]; then
+        echo "❌ Scrape interval $ACTUAL_INTERVAL exceeds minimum requirement of ${MIN_SCRAPE_INTERVAL}s"
+        ((failures++))
+    else
+        echo "✅ Scrape interval verified"
+    fi
+
+    return $failures
+}
+
+# Function to verify Grafana dashboards
+verify_grafana_dashboards() {
+    local region=$1
+    echo "Verifying Grafana dashboards for $NETWORK in $region..."
+    local failures=0
+
+    # Get Grafana pod
+    GRAFANA_POD=$(kubectl get pod -n monitoring -l app=grafana -o jsonpath='{.items[0].metadata.name}')
+
+    # Verify network-specific dashboard exists
+    DASHBOARD=$(kubectl exec -n monitoring $GRAFANA_POD -- curl -s "http://admin:admin@localhost:3000/api/dashboards/uid/besu-$NETWORK")
+    
+    if ! echo "$DASHBOARD" | jq -e '.dashboard' > /dev/null; then
+        echo "❌ Dashboard for $NETWORK not found"
+        ((failures++))
+    else
+        echo "✅ Dashboard verified"
+        
+        # Verify required panels exist
+        for metric in "${REQUIRED_METRICS[@]}"; do
+            if ! echo "$DASHBOARD" | jq --arg metric "$metric" -e '.dashboard.panels[] | select(.targets[].expr | contains($metric))' > /dev/null; then
+                echo "❌ Panel for metric $metric not found in dashboard"
+                ((failures++))
+            fi
+        done
+    fi
+
+    return $failures
+}
+
+# Function to verify metric alerts
+verify_metric_alerts() {
+    local region=$1
+    echo "Verifying metric alerts for $NETWORK in $region..."
+    local failures=0
+
+    # Get alertmanager configuration
+    ALERTS=$(kubectl get prometheusrules -n monitoring -o json | \
+        jq --arg network "$NETWORK" -r '.items[] | select(.metadata.name | contains($network))')
+    
+    if [ -z "$ALERTS" ]; then
+        echo "❌ No alerts found for $NETWORK"
+        return 1
+    fi
+
+    # Verify network-specific alert thresholds
+    case $NETWORK in
+        "mainnet")
+            if ! echo "$ALERTS" | jq -e '.spec.groups[].rules[] | select(.alert == "MainnetNodeDown" and .for == "2m")' > /dev/null; then
+                echo "❌ MainnetNodeDown alert not properly configured"
+                ((failures++))
+            fi
+            ;;
+        "testnet")
+            if ! echo "$ALERTS" | jq -e '.spec.groups[].rules[] | select(.alert == "TestnetNodeDown" and .for == "5m")' > /dev/null; then
+                echo "❌ TestnetNodeDown alert not properly configured"
+                ((failures++))
+            fi
+            ;;
+        "devnet")
+            if ! echo "$ALERTS" | jq -e '.spec.groups[].rules[] | select(.alert == "DevnetNodeDown" and .for == "10m")' > /dev/null; then
+                echo "❌ DevnetNodeDown alert not properly configured"
+                ((failures++))
+            fi
+            ;;
+    esac
+
+    return $failures
+}
+
+# Function to verify metric retention
+verify_metric_retention() {
+    local region=$1
+    echo "Verifying metric retention for $NETWORK in $region..."
+    
+    # Get Prometheus retention configuration
+    RETENTION=$(kubectl get cm -n monitoring prometheus-config -o jsonpath="{.data.prometheus\.yml}" | \
+        yq eval ".storage.tsdb.retention.time" -)
+
+    case $NETWORK in
+        "mainnet")
+            if [[ "$RETENTION" != "30d" ]]; then
+                echo "❌ Incorrect retention period for mainnet: $RETENTION (should be 30d)"
+                return 1
+            fi
+            ;;
+        "testnet")
+            if [[ "$RETENTION" != "15d" ]]; then
+                echo "❌ Incorrect retention period for testnet: $RETENTION (should be 15d)"
+                return 1
+            fi
+            ;;
+        "devnet")
+            if [[ "$RETENTION" != "7d" ]]; then
+                echo "❌ Incorrect retention period for devnet: $RETENTION (should be 7d)"
+                return 1
+            fi
+            ;;
+    esac
+
+    echo "✅ Retention period verified"
+    return 0
+}
+
+# Main verification process
+if [ -n "$REGION" ]; then
+    # Verify metrics for single region
+    echo "📊 Starting metrics verification for $NETWORK in $REGION..."
+    verify_prometheus_metrics "$REGION" && \
+    verify_grafana_dashboards "$REGION" && \
+    verify_metric_alerts "$REGION" && \
+    verify_metric_retention "$REGION"
+else
+    # Verify metrics for all regions
+    echo "📊 Starting metrics verification for $NETWORK in all regions..."
+    for region in $(az aks list --query "[].location" -o tsv | sort -u); do
+        echo "Verifying metrics in region: $region"
+        verify_prometheus_metrics "$region" && \
+        verify_grafana_dashboards "$region" && \
+        verify_metric_alerts "$region" && \
+        verify_metric_retention "$region" || \
+        echo "❌ Metrics verification failed in $region"
+    done
+fi

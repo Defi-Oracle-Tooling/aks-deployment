@@ -1,6 +1,6 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 10s
+  evaluation_interval: 10s
 
 scrape_configs:
   - job_name: 'besu-nodes'
@@ -151,6 +151,75 @@ scrape_configs:
         target_label: pod
         action: replace
 
+  - job_name: 'besu-mainnet'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:9545']
+        labels:
+          network: 'mainnet'
+          chain_id: '138'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [network]
+        target_label: network
+      - source_labels: [chain_id]
+        target_label: chain_id
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'besu_(blockchain_height|network_peer_count|synchronizer_block_height|transaction_pool_transactions|network_discovery_peer_count|network_peer_limit)'
+        action: keep
+
+  - job_name: 'besu-testnet'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['localhost:9546']
+        labels:
+          network: 'testnet'
+          chain_id: '2138'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [network]
+        target_label: network
+      - source_labels: [chain_id]
+        target_label: chain_id
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'besu_(blockchain_height|network_peer_count|synchronizer_block_height)'
+        action: keep
+
+  - job_name: 'besu-devnet'
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['localhost:9547']
+        labels:
+          network: 'devnet'
+          chain_id: '1337'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [network]
+        target_label: network
+      - source_labels: [chain_id]
+        target_label: chain_id
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'besu_(blockchain_height|network_peer_count)'
+        action: keep
+
+  - job_name: 'besu-node-metrics'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+        - 'localhost:9545'  # mainnet
+        - 'localhost:9546'  # testnet
+        - 'localhost:9547'  # devnet
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'process_(cpu_seconds_total|resident_memory_bytes|virtual_memory_bytes|open_fds)'
+        action: keep
+
 alerting:
   alertmanagers:
     - kubernetes_sd_configs:
@@ -168,7 +237,7 @@ alerting:
           action: keep
 
 rule_files:
-  - /etc/config/rules/*.yaml
+  - /etc/prometheus/rules/*.yml
 
 storage:
   tsdb:
@@ -181,3 +250,35 @@ remote_write:
       - source_labels: [__name__]
         regex: 'besu_.*'
         action: keep
+
+recording_rules:
+  groups:
+    - name: besu_mainnet_rules
+      interval: 1m
+      rules:
+        - record: besu:block_height_mainnet
+          expr: besu_blockchain_height{chain_id="138"}
+        - record: besu:peer_count_mainnet
+          expr: besu_network_peer_count{chain_id="138"}
+        - record: besu:sync_status_mainnet
+          expr: besu_synchronizer_sync_status{chain_id="138"}
+
+    - name: besu_testnet_rules
+      interval: 2m
+      rules:
+        - record: besu:block_height_testnet
+          expr: besu_blockchain_height{chain_id="2138"}
+        - record: besu:peer_count_testnet
+          expr: besu_network_peer_count{chain_id="2138"}
+        - record: besu:sync_status_testnet
+          expr: besu_synchronizer_sync_status{chain_id="2138"}
+
+    - name: besu_devnet_rules
+      interval: 5m
+      rules:
+        - record: besu:block_height_devnet
+          expr: besu_blockchain_height{chain_id="1337"}
+        - record: besu:peer_count_devnet
+          expr: besu_network_peer_count{chain_id="1337"}
+        - record: besu:sync_status_devnet
+          expr: besu_synchronizer_sync_status{chain_id="1337"}

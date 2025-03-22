@@ -97,10 +97,15 @@ resource "azurerm_kubernetes_cluster" "besu" {
 
   default_node_pool {
     name                = "system"
-    vm_size             = "Standard_D4s_v3"
+    vm_size             = local.network_config.vm_sizes.validator
     min_count           = 1
     max_count           = 3
     vnet_subnet_id      = azurerm_subnet.aks[each.key].id
+
+    node_labels = {
+      "role" = "system"
+      "network.besu.hyperledger.org/chainId" = local.network_config.chain_id
+    }
   }
 
   identity {
@@ -128,40 +133,42 @@ resource "azurerm_kubernetes_cluster" "besu" {
   }
 
   microsoft_defender {
-    enabled = true
+    log_analytics_workspace_id = azurerm_log_analytics_workspace.besu[each.key].id
   }
 
-  addon_profile {
-    oms_agent {
-      log_analytics_workspace_id = azurerm_log_analytics_workspace.besu[each.key].id
-    }
-  }
-
-  tags = var.tags
+  tags = local.common_tags
 }
 
 # Create node pools for Besu nodes
 resource "azurerm_kubernetes_cluster_node_pool" "besu" {
   for_each = {
-    for pair in local.node_pool_configs : "${pair.region}-${pair.pool_name}" => pair
+    for pair in local.node_pool_configs : "${pair.region}-${pair.pool_name}" => merge(pair, {
+      vm_size = local.node_pools[pair.pool_name].vm_size
+      min_count = local.node_pools[pair.pool_name].min_count
+      max_count = local.node_pools[pair.pool_name].max_count
+      node_labels = local.node_pools[pair.pool_name].node_labels
+      node_taints = lookup(local.node_pools[pair.pool_name], "node_taints", [])
+    })
   }
 
   name                  = each.value.pool_name
   kubernetes_cluster_id = azurerm_kubernetes_cluster.besu[each.value.region].id
-  vm_size               = var.node_pools[each.value.pool_name].vm_size
-  enable_auto_scaling   = true
-  min_count             = var.node_pools[each.value.pool_name].min_count
-  max_count             = var.node_pools[each.value.pool_name].max_count
-  vnet_subnet_id        = azurerm_subnet.aks[each.value.region].id
+  vm_size              = each.value.vm_size
+  min_count            = each.value.min_count
+  max_count            = each.value.max_count
+  vnet_subnet_id       = azurerm_subnet.aks[each.value.region].id
 
-  node_labels = {
-    "nodepool"            = each.value.pool_name
-    "besu-node-type"      = each.value.pool_name
+  node_labels = merge(each.value.node_labels, {
     "region"              = each.value.region
-  }
+    "network.type"        = var.network_type
+    "besu-node-type"      = each.value.pool_name
+  })
 
-  tags = merge(var.tags, {
+  node_taints = each.value.node_taints
+
+  tags = merge(local.common_tags, {
     NodePool = each.value.pool_name
+    Region   = each.value.region
   })
 }
 
@@ -209,6 +216,53 @@ locals {
       }
     ]
   ])
+
+  network_config = {
+    chain_id     = var.chain_id[var.network_type]
+    network_name = var.network_name[var.network_type]
+    min_nodes    = var.min_nodes[var.network_type]
+    vm_sizes     = var.vm_sizes[var.network_type]
+  }
+
+  node_pools = {
+    validator = {
+      name                = "validator"
+      vm_size            = local.network_config.vm_sizes.validator
+      min_count          = local.network_config.min_nodes
+      max_count          = local.network_config.min_nodes * 2
+      node_labels = {
+        "role" = "validator"
+        "network.besu.hyperledger.org/chainId" = local.network_config.chain_id
+      }
+      node_taints = ["role=validator:NoSchedule"]
+    }
+    bootnode = {
+      name                = "bootnode"
+      vm_size            = local.network_config.vm_sizes.bootnode
+      min_count          = max(local.network_config.min_nodes / 2, 1)
+      max_count          = local.network_config.min_nodes
+      node_labels = {
+        "role" = "bootnode"
+        "network.besu.hyperledger.org/chainId" = local.network_config.chain_id
+      }
+    }
+    rpc = {
+      name                = "rpc"
+      vm_size            = local.network_config.vm_sizes.rpc
+      min_count          = max(local.network_config.min_nodes / 2, 1)
+      max_count          = local.network_config.min_nodes
+      node_labels = {
+        "role" = "rpc"
+        "network.besu.hyperledger.org/chainId" = local.network_config.chain_id
+      }
+    }
+  }
+
+  common_tags = merge(var.tags, {
+    NetworkType = var.network_type
+    ChainId     = local.network_config.chain_id
+    NetworkName = local.network_config.network_name
+  })
 }
 
 data "azurerm_client_config" "current" {}

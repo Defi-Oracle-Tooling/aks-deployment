@@ -1,4 +1,5 @@
-environment = "prod"
+environment = "production"
+network_type = "mainnet"
 
 resource_group_prefix = "besu-network"
 cluster_prefix       = "besu-aks"
@@ -7,24 +8,24 @@ regions = ["westeurope", "eastus"]
 
 node_pools = {
   validator = {
-    vm_size   = "Standard_D8s_v3"
-    min_count = 3
-    max_count = 5
+    vm_size   = "Standard_D16s_v4"
+    min_count = 7
+    max_count = 14
   }
   bootnode = {
-    vm_size   = "Standard_D4s_v3"
-    min_count = 2
-    max_count = 3
+    vm_size   = "Standard_E16s_v4"
+    min_count = 4
+    max_count = 7
   }
   rpc = {
-    vm_size   = "Standard_D4s_v3"
-    min_count = 2
-    max_count = 4
+    vm_size   = "Standard_E16s_v5"
+    min_count = 4
+    max_count = 7
   }
 }
 
 monitoring = {
-  retention_days = 30
+  retention_days = 90
   alerts_enabled = true
 }
 
@@ -38,8 +39,8 @@ network = {
 tags = {
   Environment = "Production"
   ManagedBy   = "Terraform"
-  Network     = "Besu"
-  CostCenter  = "Blockchain"
+  Network     = "Defi Oracle Meta Mainnet"
+  CostCenter  = "Blockchain-Prod"
   Service     = "Besu-Network"
   Criticality = "High"
 }
@@ -51,8 +52,8 @@ azure_key_vault = {
 }
 
 alerts = {
-  cpu_threshold    = 80
-  memory_threshold = 85
-  disk_threshold   = 80
-  peer_count_min   = 3
+  cpu_threshold    = 85
+  memory_threshold = 90
+  disk_threshold   = 85
+  peer_count_min   = 5
 }

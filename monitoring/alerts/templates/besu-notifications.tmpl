@@ -1,61 +1,296 @@
 {{ define "slack.title" }}
-[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }}
-{{ end }}
+{{- if eq .GroupLabels.network "mainnet" -}}
+🔴 [MAINNET]
+{{- else if eq .GroupLabels.network "testnet" -}}
+🟡 [TESTNET]
+{{- else if eq .GroupLabels.network "devnet" -}}
+🔵 [DEVNET]
+{{- end -}}
+ {{ .GroupLabels.alertname }}
+{{- end }}
 
 {{ define "slack.text" }}
-{{ range .Alerts }}
-*Alert:* {{ .Labels.alertname }}
-*Severity:* {{ .Labels.severity }}
-*Region:* {{ .Labels.region }}
-*Type:* {{ .Labels.type }}
-*Description:* {{ .Annotations.description }}
-*Details:*
-{{ range .Labels.SortedPairs }}
-  • {{ .Name }}: {{ .Value }}
-{{ end }}
-*Value:* {{ .ValueString }}
-*Started:* {{ .StartsAt | since }}
-{{ if .EndsAt }}*Ended:* {{ .EndsAt | since }}{{ end }}
-{{ end }}
+{{ if eq .GroupLabels.network "mainnet" -}}
+*MAINNET ALERT - Priority: Immediate Response Required*
+{{- else if eq .GroupLabels.network "testnet" -}}
+*TESTNET ALERT - Priority: Response Required*
+{{- else if eq .GroupLabels.network "devnet" -}}
+*DEVNET ALERT - Priority: Low*
+{{- end }}
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Severity:* {{ .GroupLabels.severity }}
+*Network:* {{ .GroupLabels.network }}
+*Region:* {{ .GroupLabels.region }}
+
+*Summary:* {{ (index .Alerts 0).Annotations.summary }}
+*Description:* {{ (index .Alerts 0).Annotations.description }}
+
+*Affected Instances:*
+{{- range .Alerts }}
+• {{ .Labels.instance }}
+{{- end }}
+
+*Runbook:* https://runbooks.besu-ops.com/{{ .GroupLabels.network }}/{{ .GroupLabels.alertname }}
 {{ end }}
 
 {{ define "opsgenie.message" }}
-[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} - {{ .CommonLabels.region }}
+[{{ .GroupLabels.network | toUpper }}] {{ .GroupLabels.alertname }}: {{ (index .Alerts 0).Annotations.summary }}
 {{ end }}
 
 {{ define "opsgenie.description" }}
-{{ range .Alerts }}
-Alert: {{ .Labels.alertname }}
-Severity: {{ .Labels.severity }}
-Region: {{ .Labels.region }}
-Type: {{ .Labels.type }}
-Description: {{ .Annotations.description }}
+Network: {{ .GroupLabels.network }}
+Region: {{ .GroupLabels.region }}
+Alert: {{ .GroupLabels.alertname }}
+Severity: {{ .GroupLabels.severity }}
 
-Details:
-{{ range .Labels.SortedPairs }}
-- {{ .Name }}: {{ .Value }}
-{{ end }}
+Summary: {{ (index .Alerts 0).Annotations.summary }}
+Description: {{ (index .Alerts 0).Annotations.description }}
 
-Value: {{ .ValueString }}
-Started: {{ .StartsAt | since }}
-{{ if .EndsAt }}Ended: {{ .EndsAt | since }}{{ end }}
+Affected Instances:
+{{- range .Alerts }}
+- {{ .Labels.instance }}
+{{- end }}
 
-{{ end }}
+Runbook: https://runbooks.besu-ops.com/{{ .GroupLabels.network }}/{{ .GroupLabels.alertname }}
 {{ end }}
 
 {{ define "email.subject" }}
-[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} - {{ .CommonLabels.region }}
+[{{ .GroupLabels.network | toUpper }}] {{ .GroupLabels.alertname }}: {{ (index .Alerts 0).Annotations.summary }}
+{{ end }}
+
+{{ define "email.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .mainnet { color: #ff0000; }
+        .testnet { color: #ffa500; }
+        .devnet { color: #0000ff; }
+        .details { margin: 10px 0; }
+        .instances { margin-left: 20px; }
+    </style>
+</head>
+<body>
+    <h2 class="{{ .GroupLabels.network }}">
+        [{{ .GroupLabels.network | toUpper }}] {{ .GroupLabels.alertname }}
+    </h2>
+    <div class="details">
+        <p><strong>Network:</strong> {{ .GroupLabels.network }}</p>
+        <p><strong>Region:</strong> {{ .GroupLabels.region }}</p>
+        <p><strong>Severity:</strong> {{ .GroupLabels.severity }}</p>
+        <p><strong>Summary:</strong> {{ (index .Alerts 0).Annotations.summary }}</p>
+        <p><strong>Description:</strong> {{ (index .Alerts 0).Annotations.description }}</p>
+    </div>
+    <div class="instances">
+        <h3>Affected Instances:</h3>
+        <ul>
+        {{- range .Alerts }}
+            <li>{{ .Labels.instance }}</li>
+        {{- end }}
+        </ul>
+    </div>
+    <p>
+        <a href="https://runbooks.besu-ops.com/{{ .GroupLabels.network }}/{{ .GroupLabels.alertname }}">View Runbook</a>
+    </p>
+</body>
+</html>
 {{ end }}
 
 {{ define "pagerduty.description" }}
-{{ range .Alerts }}
-{{ .Labels.alertname }} - {{ .Labels.region }}
-Severity: {{ .Labels.severity }}
-Type: {{ .Labels.type }}
-{{ .Annotations.description }}
+[{{ .GroupLabels.network | toUpper }}] {{ .GroupLabels.alertname }}: {{ (index .Alerts 0).Annotations.summary }}
+
+Network: {{ .GroupLabels.network }}
+Region: {{ .GroupLabels.region }}
+Severity: {{ .GroupLabels.severity }}
+
+{{ (index .Alerts 0).Annotations.description }}
+
+Affected Instances:
+{{- range .Alerts }}
+- {{ .Labels.instance }}
+{{- end }}
+{{ end }}
+
+{{ define "besu.default" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+{{- if .CommonLabels.network }} ({{ .CommonLabels.network | toUpper }}){{ end }}
+
+Network Details:
+- Chain ID: {{ .CommonLabels.chain_id }}
+- Network: {{ .CommonLabels.network }}
+- Environment: {{ .CommonLabels.environment }}
+
+Alerts:
+{{ range .Alerts -}}
+{{ if .Annotations.description }}{{ .Annotations.description }}{{ else }}{{ .Annotations.message }}{{ end }}
+Labels:
+{{ range .Labels.SortedPairs }} - {{ .Name }}: {{ .Value }}
 {{ end }}
 {{ end }}
 
-{{ define "pagerduty.client.url" }}
-https://grafana.company.com/d/besu-dashboard/besu-network-overview?orgId=1&var-region={{ .CommonLabels.region }}
+{{ if .CommonLabels.runbook_url }}Runbook: {{ .CommonLabels.runbook_url }}{{ end }}
+{{ end }}
+
+{{ define "besu.mainnet" }}
+🚨 MAINNET ALERT 🚨
+{{ template "besu.default" . }}
+{{ if eq .Status "firing" }}
+Priority: CRITICAL - Immediate action required
+Escalation: Page on-call engineer
+{{ end }}
+{{ end }}
+
+{{ define "besu.testnet" }}
+⚠️ TESTNET ALERT ⚠️
+{{ template "besu.default" . }}
+{{ if eq .Status "firing" }}
+Priority: High - Response required within 1 hour
+{{ end }}
+{{ end }}
+
+{{ define "besu.devnet" }}
+ℹ️ DEVNET ALERT ℹ️
+{{ template "besu.default" . }}
+{{ if eq .Status "firing" }}
+Priority: Low - Review during business hours
+{{ end }}
+{{ end }}
+
+{{ define "besu.slack.mainnet" }}
+{
+    "blocks": [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "🚨 Mainnet Alert: {{ .CommonLabels.alertname }}",
+                "emoji": true
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": "*Status:* {{ .Status | toUpper }}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": "*Chain ID:* 138"
+                }
+            ]
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "{{ range .Alerts }}*Description:* {{ .Annotations.description }}\n{{ end }}"
+            }
+        }
+    ]
+}
+{{ end }}
+
+{{ define "besu.slack.testnet" }}
+{
+    "blocks": [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "⚠️ Testnet Alert: {{ .CommonLabels.alertname }}",
+                "emoji": true
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": "*Status:* {{ .Status | toUpper }}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": "*Chain ID:* 2138"
+                }
+            ]
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "{{ range .Alerts }}*Description:* {{ .Annotations.description }}\n{{ end }}"
+            }
+        }
+    ]
+}
+{{ end }}
+
+{{ define "besu.slack.devnet" }}
+{
+    "blocks": [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "ℹ️ Devnet Alert: {{ .CommonLabels.alertname }}",
+                "emoji": true
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": "*Status:* {{ .Status | toUpper }}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": "*Chain ID:* 1337"
+                }
+            ]
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "{{ range .Alerts }}*Description:* {{ .Annotations.description }}\n{{ end }}"
+            }
+        }
+    ]
+}
+{{ end }}
+
+{{ define "besu.teams" }}
+{
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    "themeColor": "{{ if eq .CommonLabels.network "mainnet" }}FF0000{{ else if eq .CommonLabels.network "testnet" }}FFA500{{ else }}0000FF{{ end }}",
+    "summary": "{{ .CommonLabels.alertname }}",
+    "title": "{{ .CommonLabels.network | toUpper }} Alert: {{ .CommonLabels.alertname }}",
+    "sections": [
+        {
+            "facts": [
+                {
+                    "name": "Status",
+                    "value": "{{ .Status | toUpper }}"
+                },
+                {
+                    "name": "Chain ID",
+                    "value": "{{ .CommonLabels.chain_id }}"
+                },
+                {
+                    "name": "Environment",
+                    "value": "{{ .CommonLabels.environment }}"
+                }
+            ]
+        },
+        {
+            "text": "{{ range .Alerts }}**Description:** {{ .Annotations.description }}\n\n{{ end }}"
+        }
+    ]
+}
 {{ end }}
