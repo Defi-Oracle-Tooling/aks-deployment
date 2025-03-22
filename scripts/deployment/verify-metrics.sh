@@ -371,6 +371,149 @@ verify_monitoring_performance() {
     return 0
 }
 
+verify_slack_integration() {
+    echo "Verifying Slack integration for alerts..."
+    
+    # Check if AlertManager is deployed
+    if ! kubectl get pods -n "$MONITORING_NAMESPACE" -l app=alertmanager -o name | grep -q "pod/"; then
+        echo "AlertManager not deployed, skipping Slack integration verification"
+        return 0
+    fi
+    
+    # Get AlertManager pod
+    local alertmanager_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=alertmanager -o jsonpath='{.items[0].metadata.name}')
+    
+    # Check AlertManager config for Slack integration
+    local config_content=$(kubectl exec -n "$MONITORING_NAMESPACE" "$alertmanager_pod" -- curl -s localhost:9093/api/v1/status | jq -r '.config')
+    
+    if ! echo "$config_content" | grep -q "slack_api_url"; then
+        handle_error 121 "Slack API URL not configured in AlertManager"
+        return 1
+    fi
+    
+    # Check if the specific Besu alerts channel is configured
+    if ! echo "$config_content" | grep -q "#besu-alerts"; then
+        handle_error 122 "Besu alerts Slack channel not configured"
+        return 1
+    fi
+    
+    # Verify Slack receiver exists in AlertManager config
+    local slack_receiver=$(kubectl get secret -n "$MONITORING_NAMESPACE" alertmanager-alertmanager -o jsonpath='{.data.alertmanager\.yml}' | base64 --decode | grep -A 10 "slack_configs")
+    
+    if [[ -z "$slack_receiver" ]]; then
+        handle_error 123 "Slack receiver not configured in AlertManager"
+        return 1
+    fi
+    
+    # Check if webhook URL is properly set (this checks if it exists, not if it's valid)
+    if ! echo "$slack_receiver" | grep -q "api_url"; then
+        handle_error 124 "Slack webhook URL not configured"
+        return 1
+    fi
+    
+    echo "Slack integration verified successfully"
+    log_audit "slack_integration_verified" "Slack integration for alerts verified"
+    return 0
+}
+
+verify_monitoring_stack_health() {
+    echo "Verifying overall monitoring stack health..."
+    
+    # Check Prometheus can reach Besu endpoints
+    local prometheus_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].metadata.name}')
+    local target_health=$(kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("besu")) | .health')
+    
+    # Count targets and their health status
+    local total_targets=$(echo "$target_health" | wc -l)
+    local healthy_targets=$(echo "$target_health" | grep -c '"up"')
+    
+    if [[ $total_targets -eq 0 ]]; then
+        handle_error 125 "No Besu targets found in Prometheus"
+        return 1
+    fi
+    
+    local health_percentage=$((healthy_targets * 100 / total_targets))
+    echo "Besu target health: $health_percentage% ($healthy_targets/$total_targets targets healthy)"
+    
+    if [[ $health_percentage -lt 80 ]]; then
+        handle_error 126 "Less than 80% of Besu targets are healthy"
+        return 1
+    fi
+    
+    # Check that AlertManager can be reached by Prometheus
+    if ! kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/alertmanagers" | jq -e '.data.activeAlertmanagers | length > 0' > /dev/null; then
+        handle_error 127 "Prometheus cannot reach AlertManager"
+        return 1
+    fi
+    
+    # Check Grafana can query Prometheus
+    local grafana_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=grafana -o jsonpath='{.items[0].metadata.name}')
+    local datasource_health=$(kubectl exec -n "$MONITORING_NAMESPACE" "$grafana_pod" -- curl -s "localhost:${GRAFANA_PORT}/api/datasources/proxy/1/api/v1/query?query=up")
+    
+    if ! echo "$datasource_health" | jq -e '.data.result | length > 0' > /dev/null; then
+        handle_error 128 "Grafana cannot query Prometheus"
+        return 1
+    fi
+    
+    echo "All monitoring stack components are communicating properly"
+    log_audit "monitoring_stack_health_verified" "Overall monitoring stack health verified"
+    return 0
+}
+
+verify_monitoring_system_sizing() {
+    echo "Verifying monitoring system sizing..."
+    
+    # Get cluster node count
+    local node_count=$(kubectl get nodes --no-headers | wc -l)
+    
+    # Get Besu pod count
+    local besu_pod_count=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/part-of=besu --no-headers | wc -l)
+    
+    # Get Prometheus resource allocation
+    local prometheus_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].metadata.name}')
+    local prometheus_cpu_request=$(kubectl get pod -n "$MONITORING_NAMESPACE" "$prometheus_pod" -o jsonpath='{.spec.containers[0].resources.requests.cpu}')
+    local prometheus_memory_request=$(kubectl get pod -n "$MONITORING_NAMESPACE" "$prometheus_pod" -o jsonpath='{.spec.containers[0].resources.requests.memory}')
+    local prometheus_storage=$(kubectl get pvc -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].spec.resources.requests.storage}')
+    
+    echo "Current monitoring system sizing:"
+    echo "- Cluster nodes: $node_count"
+    echo "- Besu pods: $besu_pod_count"
+    echo "- Prometheus CPU request: $prometheus_cpu_request"
+    echo "- Prometheus memory request: $prometheus_memory_request"
+    echo "- Prometheus storage: $prometheus_storage"
+    
+    # Check if Prometheus has enough resources based on cluster size
+    # These are heuristic values that should be adjusted based on actual usage patterns
+    if [[ $besu_pod_count -gt 20 ]]; then
+        local min_cpu="1000m"
+        local min_memory="4Gi"
+        local min_storage="100Gi"
+        
+        # Extract numeric values for comparison
+        local prometheus_cpu_value=$(echo "$prometheus_cpu_request" | sed 's/[^0-9]*//g')
+        local prometheus_memory_value=$(echo "$prometheus_memory_request" | sed 's/[^0-9]*//g')
+        local prometheus_storage_value=$(echo "$prometheus_storage" | sed 's/[^0-9]*//g')
+        
+        if [[ $prometheus_cpu_value -lt 1000 ]]; then
+            echo "Warning: Prometheus CPU allocation may be too low for cluster size"
+            log_audit "prometheus_low_cpu" "Prometheus CPU allocation may be too low: $prometheus_cpu_request < $min_cpu"
+        fi
+        
+        if [[ $prometheus_memory_value -lt 4 ]]; then
+            echo "Warning: Prometheus memory allocation may be too low for cluster size"
+            log_audit "prometheus_low_memory" "Prometheus memory allocation may be too low: $prometheus_memory_request < $min_memory"
+        fi
+        
+        if [[ $prometheus_storage_value -lt 100 ]]; then
+            echo "Warning: Prometheus storage allocation may be too low for cluster size"
+            log_audit "prometheus_low_storage" "Prometheus storage allocation may be too low: $prometheus_storage < $min_storage"
+        fi
+    fi
+    
+    log_audit "monitoring_sizing_verified" "Monitoring system sizing verified"
+    return 0
+}
+
 generate_monitoring_report() {
     echo "Generating monitoring system report..."
     local report_file="${LOG_DIR}/monitoring_report_$(date +%Y%m%d_%H%M%S).json"
@@ -458,7 +601,10 @@ while read -r region; do
     verify_historical_data && \
     verify_notification_templates && \
     verify_scrape_intervals && \
-    verify_monitoring_performance
+    verify_monitoring_performance && \
+    verify_slack_integration && \
+    verify_monitoring_stack_health && \
+    verify_monitoring_system_sizing
     
     if [ $? -eq 0 ]; then
         echo "✅ Monitoring verification successful for $region"

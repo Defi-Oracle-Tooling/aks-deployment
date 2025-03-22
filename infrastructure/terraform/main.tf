@@ -98,7 +98,6 @@ resource "azurerm_kubernetes_cluster" "besu" {
   default_node_pool {
     name                = "system"
     vm_size             = "Standard_D4s_v3"
-    enable_auto_scaling = true
     min_count           = 1
     max_count           = 3
     vnet_subnet_id      = azurerm_subnet.aks[each.key].id
@@ -114,7 +113,6 @@ resource "azurerm_kubernetes_cluster" "besu" {
     load_balancer_sku  = "standard"
     service_cidr       = "10.100.0.0/16"
     dns_service_ip     = "10.100.0.10"
-    docker_bridge_cidr = "172.17.0.1/16"
   }
 
   auto_scaler_profile {
@@ -133,8 +131,10 @@ resource "azurerm_kubernetes_cluster" "besu" {
     enabled = true
   }
 
-  oms_agent {
-    log_analytics_workspace_id = azurerm_log_analytics_workspace.besu[each.key].id
+  addon_profile {
+    oms_agent {
+      log_analytics_workspace_id = azurerm_log_analytics_workspace.besu[each.key].id
+    }
   }
 
   tags = var.tags
