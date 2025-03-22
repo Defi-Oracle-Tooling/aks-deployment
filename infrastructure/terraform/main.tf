@@ -13,7 +13,7 @@ terraform {
     resource_group_name  = "terraform-state-rg"
     storage_account_name = "besutfstate"
     container_name       = "tfstate"
-    key                 = "besu.tfstate"
+    key                  = "besu.tfstate"
   }
 }
 
@@ -41,17 +41,17 @@ resource "azurerm_key_vault" "besu" {
   
   name                = "${lower(replace(var.resource_group_prefix, "-", ""))}${each.key}"
   resource_group_name = azurerm_resource_group.besu[each.key].name
-  location           = azurerm_resource_group.besu[each.key].location
-  tenant_id          = data.azurerm_client_config.current.tenant_id
-  sku_name           = "premium"
+  location            = azurerm_resource_group.besu[each.key].location
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "premium"
 
   enabled_for_disk_encryption = true
   purge_protection_enabled    = true
   soft_delete_retention_days  = 90
 
   network_acls {
-    bypass                    = "AzureServices"
-    default_action           = "Deny"
+    bypass                     = "AzureServices"
+    default_action             = "Deny"
     virtual_network_subnet_ids = [azurerm_subnet.aks[each.key].id]
   }
 
@@ -64,8 +64,8 @@ resource "azurerm_virtual_network" "besu" {
   
   name                = "${var.resource_group_prefix}-vnet-${each.key}"
   resource_group_name = azurerm_resource_group.besu[each.key].name
-  location           = azurerm_resource_group.besu[each.key].location
-  address_space      = [var.network.vnet_cidr]
+  location            = azurerm_resource_group.besu[each.key].location
+  address_space       = [var.network.vnet_cidr]
   
   tags = var.tags
 }
@@ -90,18 +90,18 @@ resource "azurerm_kubernetes_cluster" "besu" {
   for_each = toset(local.regions)
   
   name                = "${var.cluster_prefix}-${each.key}"
-  location           = azurerm_resource_group.besu[each.key].location
+  location            = azurerm_resource_group.besu[each.key].location
   resource_group_name = azurerm_resource_group.besu[each.key].name
-  dns_prefix         = "${var.cluster_prefix}-${each.key}"
-  kubernetes_version = "1.25.6"
+  dns_prefix          = "${var.cluster_prefix}-${each.key}"
+  kubernetes_version  = "1.25.6"
 
   default_node_pool {
     name                = "system"
-    vm_size            = "Standard_D4s_v3"
+    vm_size             = "Standard_D4s_v3"
     enable_auto_scaling = true
-    min_count          = 1
-    max_count          = 3
-    vnet_subnet_id     = azurerm_subnet.aks[each.key].id
+    min_count           = 1
+    max_count           = 3
+    vnet_subnet_id      = azurerm_subnet.aks[each.key].id
   }
 
   identity {
@@ -118,13 +118,13 @@ resource "azurerm_kubernetes_cluster" "besu" {
   }
 
   auto_scaler_profile {
-    scale_down_delay_after_add = "10m"
-    scale_down_unneeded       = "10m"
+    scale_down_delay_after_add   = "10m"
+    scale_down_unneeded          = "10m"
     max_graceful_termination_sec = "600"
   }
 
   role_based_access_control_enabled = true
-  azure_policy_enabled             = true
+  azure_policy_enabled              = true
   key_vault_secrets_provider {
     secret_rotation_enabled = true
   }
@@ -148,16 +148,16 @@ resource "azurerm_kubernetes_cluster_node_pool" "besu" {
 
   name                  = each.value.pool_name
   kubernetes_cluster_id = azurerm_kubernetes_cluster.besu[each.value.region].id
-  vm_size              = var.node_pools[each.value.pool_name].vm_size
+  vm_size               = var.node_pools[each.value.pool_name].vm_size
   enable_auto_scaling   = true
-  min_count            = var.node_pools[each.value.pool_name].min_count
-  max_count            = var.node_pools[each.value.pool_name].max_count
-  vnet_subnet_id       = azurerm_subnet.aks[each.value.region].id
+  min_count             = var.node_pools[each.value.pool_name].min_count
+  max_count             = var.node_pools[each.value.pool_name].max_count
+  vnet_subnet_id        = azurerm_subnet.aks[each.value.region].id
 
   node_labels = {
     "nodepool"            = each.value.pool_name
     "besu-node-type"      = each.value.pool_name
-    "region"             = each.value.region
+    "region"              = each.value.region
   }
 
   tags = merge(var.tags, {
@@ -171,9 +171,9 @@ resource "azurerm_log_analytics_workspace" "besu" {
   
   name                = "${var.cluster_prefix}-logs-${each.key}"
   resource_group_name = azurerm_resource_group.besu[each.key].name
-  location           = azurerm_resource_group.besu[each.key].location
-  sku               = "PerGB2018"
-  retention_in_days  = var.monitoring.retention_days
+  location            = azurerm_resource_group.besu[each.key].location
+  sku                 = "PerGB2018"
+  retention_in_days   = var.monitoring.retention_days
 
   tags = var.tags
 }
@@ -205,7 +205,7 @@ locals {
     for region in local.regions : [
       for pool_name in keys(var.node_pools) : {
         region     = region
-        pool_name = pool_name
+        pool_name  = pool_name
       }
     ]
   ])
@@ -216,17 +216,17 @@ data "azurerm_client_config" "current" {}
 module "besu_network" {
   source = "./modules/besu-network"
   
-  environment         = var.environment
-  regions            = var.regions
+  environment           = var.environment
+  regions               = var.regions
   resource_group_prefix = var.resource_group_prefix
-  cluster_prefix     = var.cluster_prefix
-  node_pools         = var.node_pools
+  cluster_prefix        = var.cluster_prefix
+  node_pools            = var.node_pools
 }
 
 module "monitoring" {
   source = "./modules/monitoring"
   
-  environment         = var.environment
-  resource_group_prefix = var.resource_group_prefix
+  environment                  = var.environment
+  resource_group_prefix        = var.resource_group_prefix
   log_analytics_workspace_name = var.log_analytics_workspace_name
 }
