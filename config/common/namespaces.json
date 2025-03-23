@@ -1,0 +1,24 @@
+{
+  "namespaces": {
+    "blockchain": {
+      "mainnet": "besu-mainnet",
+      "testnet": "besu-testnet",
+      "devnet": "besu-devnet",
+      "default": "besu"
+    },
+    "monitoring": {
+      "default": "monitoring",
+      "metrics": "metrics",
+      "alerts": "alerts"
+    },
+    "testing": {
+      "default": "test",
+      "integration": "integration-test"
+    },
+    "infrastructure": {
+      "default": "infra",
+      "storage": "storage",
+      "networking": "network"
+    }
+  }
+}

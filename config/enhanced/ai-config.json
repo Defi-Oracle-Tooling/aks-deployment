@@ -1,0 +1,17 @@
+{
+  "agents": {
+    "types": ["anomaly-detection", "optimization", "prediction"],
+    "scaling": {
+      "minReplicas": 1,
+      "maxReplicas": 3
+    }
+  },
+  "orchestration": {
+    "type": "kubernetes",
+    "scheduler": "custom",
+    "monitoring": {
+      "enabled": true,
+      "metrics": ["performance", "accuracy", "resource-usage"]
+    }
+  }
+}

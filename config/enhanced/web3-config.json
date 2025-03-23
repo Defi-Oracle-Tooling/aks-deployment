@@ -1,0 +1,12 @@
+{
+  "frontend": {
+    "type": "web3",
+    "framework": "next",
+    "features": ["wallet-connect", "transaction-monitoring", "block-explorer"],
+    "scaling": {
+      "minReplicas": 2,
+      "maxReplicas": 5,
+      "targetCPUUtilization": 70
+    }
+  }
+}

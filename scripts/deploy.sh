@@ -67,12 +67,28 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
+        --deployment-type)
+            DEPLOYMENT_TYPE="$2"
+            shift
+            shift
+            ;;
+        --providers)
+            PROVIDERS="$2"
+            shift
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
             ;;
     esac
 done
+
+# Validate deployment type
+if [[ -n "$DEPLOYMENT_TYPE" && ! "$DEPLOYMENT_TYPE" =~ ^(kubernetes|container|hybrid|single)$ ]]; then
+    echo "Error: Invalid deployment type. Must be kubernetes, container, hybrid, or single."
+    exit 1
+fi
 
 # Default to mainnet if not specified
 NETWORK=${NETWORK:-mainnet}
@@ -329,20 +345,28 @@ export -f deploy_to_region
 export -f cleanup_resources
 export -f rollback_deployment
 
-jq -r ".regions[] | select(.enabled == true) | .name" "$AZURE_REGIONS_FILE" | while read -r region; do
-    echo "Deploying to $region for $NETWORK_NAME..." | tee -a $LOG_FILE
-    
-    # Get VM family configuration for the current network
-    vm_family_config=$(jq -r ".environments.$NETWORK.vmFamilies[] | select(.recommended == true) | .name" "$AZURE_VM_FAMILIES_FILE" | head -n 1)
-    
-    if deploy_to_region "$region" "$vm_family_config" "$NETWORK"; then
-        echo "$region" >> "$SUCCESS_FILE"
-        echo "✅ Deployment in $region completed!" | tee -a $LOG_FILE
-    else
-        echo "$region" >> "$FAILED_FILE"
-        echo "❌ Deployment in $region failed!" | tee -a $LOG_FILE
-    fi
-done
+# Execute deployment based on type
+case $DEPLOYMENT_TYPE in
+    hybrid)
+        "${PROJECT_ROOT}/scripts/deployment/hybrid-deploy.sh" --config "${PROJECT_ROOT}/config/hybrid-config.json"
+        ;;
+    *)
+        jq -r ".regions[] | select(.enabled == true) | .name" "$AZURE_REGIONS_FILE" | while read -r region; do
+            echo "Deploying to $region for $NETWORK_NAME..." | tee -a $LOG_FILE
+            
+            # Get VM family configuration for the current network
+            vm_family_config=$(jq -r ".environments.$NETWORK.vmFamilies[] | select(.recommended == true) | .name" "$AZURE_VM_FAMILIES_FILE" | head -n 1)
+            
+            if deploy_to_region "$region" "$vm_family_config" "$NETWORK"; then
+                echo "$region" >> "$SUCCESS_FILE"
+                echo "✅ Deployment in $region completed!" | tee -a $LOG_FILE
+            else
+                echo "$region" >> "$FAILED_FILE"
+                echo "❌ Deployment in $region failed!" | tee -a $LOG_FILE
+            fi
+        done
+        ;;
+esac
 
 # Retry deployment for failed regions
 if [[ -s $FAILED_FILE ]]; then

@@ -28,6 +28,31 @@ VM_FAMILIES_FILE=$(jq -r '.cloud_providers.azure.vm_families' "$CONFIG_PATHS_FIL
 NETWORKS_FILE=$(jq -r '.cloud_providers.azure.networks' "$CONFIG_PATHS_FILE")
 STORAGE_FILE=$(jq -r '.cloud_providers.azure.storage' "$CONFIG_PATHS_FILE")
 
+# Load namespace configuration
+NAMESPACES_FILE=$(jq -r '.common.namespaces' "$CONFIG_PATHS_FILE")
+
+# Function to get namespace
+get_namespace() {
+    local category=$1
+    local type=${2:-"default"}
+    
+    if [[ ! -f "$NAMESPACES_FILE" ]]; then
+        echo "Error: Namespaces configuration file not found" >&2
+        return 1
+    fi
+    
+    jq -r ".namespaces.$category.$type" "$NAMESPACES_FILE"
+}
+
+# Export the namespace function
+export -f get_namespace
+
+# Initialize namespace variables
+BLOCKCHAIN_NAMESPACE=$(get_namespace "blockchain")
+MONITORING_NAMESPACE=$(get_namespace "monitoring")
+TESTING_NAMESPACE=$(get_namespace "testing")
+INFRA_NAMESPACE=$(get_namespace "infrastructure")
+
 # Constants for logging
 LOG_DIR="/var/log/besu"
 DEPLOYMENT_LOG="${LOG_DIR}/deployment.log"
@@ -154,6 +179,90 @@ cleanup_resources() {
     fi
 }
 
+# Add multi-cloud support functions
+deploy_aws() {
+    local config=$1
+    local regions=$(jq -r '.aws.regions[]' "$config")
+    
+    for region in $regions; do
+        echo "Deploying to AWS region: $region"
+        # AWS deployment logic
+        aws eks create-cluster \
+            --name "besu-${region}" \
+            --region "$region" \
+            --kubernetes-version "1.24" \
+            --role-arn "$(get_config_value aws.roleArn)" \
+            --resources-vpc-config "$(get_config_value aws.vpcConfig)"
+    done
+}
+
+deploy_gcp() {
+    local config=$1
+    local regions=$(jq -r '.gcp.regions[]' "$config")
+    
+    for region in $regions; do
+        echo "Deploying to GCP region: $region"
+        # GCP deployment logic
+        gcloud container clusters create "besu-${region}" \
+            --region "$region" \
+            --num-nodes "$(get_config_value gcp.nodeCount)" \
+            --machine-type "$(get_config_value gcp.machineType)"
+    done
+}
+
+deploy_local() {
+    local config=$1
+    echo "Deploying to local infrastructure"
+    # Local deployment logic using kind or minikube
+    if command -v kind &> /dev/null; then
+        kind create cluster --name "besu-local" --config "$config"
+    else
+        minikube start --nodes "$(get_config_value local.nodeCount)"
+    fi
+}
+
+# Add AI deployment support functions
+deploy_ai_components() {
+    local config=$1
+    local component=$2
+    
+    case $component in
+        agents)
+            kubectl apply -f "${PROJECT_ROOT}/ai/agents/manifests/"
+            ;;
+        orchestration)
+            kubectl apply -f "${PROJECT_ROOT}/ai/orchestration/manifests/"
+            ;;
+    esac
+}
+
+# Add enhanced monitoring support
+deploy_enhanced_monitoring() {
+    local component=$1
+    
+    case $component in
+        frontend)
+            deploy_grafana_dashboards "web3"
+            ;;
+        backend)
+            deploy_prometheus_rules "enhanced"
+            ;;
+        ai)
+            deploy_ai_metrics_collector
+            ;;
+    esac
+}
+
+# Function to check cross-provider connectivity
+check_cross_provider_connectivity() {
+    # Test connectivity between providers
+    for provider in "${SUPPORTED_PROVIDERS[@]}"; do
+        if [[ -n "$(get_config_value ${provider}.enabled)" ]]; then
+            test_provider_connectivity "$provider"
+        fi
+    done
+}
+
 # Export functions
 export -f handle_error
 export -f collect_metrics
@@ -162,3 +271,9 @@ export -f log_audit
 export -f monitor_performance
 export -f trigger_alert
 export -f cleanup_resources
+export -f deploy_aws
+export -f deploy_gcp
+export -f deploy_local
+export -f deploy_ai_components
+export -f deploy_enhanced_monitoring
+export -f check_cross_provider_connectivity

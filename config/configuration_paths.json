@@ -20,7 +20,8 @@
   "common": {
     "logging": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/logging.json",
     "monitoring": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/monitoring.json",
-    "security": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/security.json"
+    "security": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/security.json",
+    "namespaces": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/namespaces.json"
   },
   "environments": {
     "production": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/environments/production.json",

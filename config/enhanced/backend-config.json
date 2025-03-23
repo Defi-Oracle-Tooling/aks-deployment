@@ -1,0 +1,14 @@
+{
+  "database": {
+    "type": "postgresql",
+    "replicas": 3,
+    "sharding": {
+      "enabled": true,
+      "shards": 4
+    },
+    "backup": {
+      "enabled": true,
+      "schedule": "0 */6 * * *"
+    }
+  }
+}

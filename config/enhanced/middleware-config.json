@@ -1,0 +1,14 @@
+{
+  "api": {
+    "type": "graphql",
+    "endpoints": ["transactions", "blocks", "metrics"],
+    "scaling": {
+      "minReplicas": 2,
+      "maxReplicas": 6
+    },
+    "cache": {
+      "enabled": true,
+      "type": "redis"
+    }
+  }
+}
