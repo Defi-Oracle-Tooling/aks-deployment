@@ -3,9 +3,20 @@
 # Set project root
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-# Set variables
-REGIONS_FILE="${PROJECT_ROOT}/infrastructure/configs/regions.json"
-VM_FAMILIES_FILE="${PROJECT_ROOT}/infrastructure/configs/vm_families.json"
+# Source the deployment utilities (includes configuration loading)
+source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+
+# Use the get_config_value function from the utility
+AZURE_REGIONS=$(get_config_value "cloud_providers.azure.regions")
+echo "Checking quotas for Azure regions: $AZURE_REGIONS"
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+REGIONS_FILE=$(get_config_value "cloud_providers.azure.regions")
+VM_FAMILIES_FILE=$(get_config_value "cloud_providers.azure.vm_families")
+NETWORKS_FILE=$(get_config_value "cloud_providers.azure.networks")
+STORAGE_FILE=$(get_config_value "cloud_providers.azure.storage")
+
 TIMESTAMP=$(date "+%Y%m%d_%H%M%S")
 
 # Parse command line arguments

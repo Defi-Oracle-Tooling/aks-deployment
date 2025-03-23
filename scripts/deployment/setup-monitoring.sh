@@ -1,7 +1,21 @@
 #!/bin/bash
 
-# Source deployment utilities
-source $(dirname "$0")/deployment-utils.sh
+# Set project root
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+# Source the deployment utilities (includes configuration loading)
+source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+
+# Use the get_config_value function from the utility
+PROMETHEUS_SCRAPE_INTERVAL=$(get_config_value "common.monitoring.prometheus.scrape_interval")
+echo "Prometheus scrape interval: $PROMETHEUS_SCRAPE_INTERVAL"
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+REGIONS_FILE=$(get_config_value "cloud_providers.azure.regions")
+VM_FAMILIES_FILE=$(get_config_value "cloud_providers.azure.vm_families")
+NETWORKS_FILE=$(get_config_value "cloud_providers.azure.networks")
+STORAGE_FILE=$(get_config_value "cloud_providers.azure.storage")
 
 # Initialize logging
 setup_logging
@@ -64,7 +78,7 @@ configure_service_monitors() {
     
     # Apply ServiceMonitor for Besu validators
     kubectl apply -f "${PROJECT_ROOT}/infrastructure/helm-charts/besu-validator/templates/servicemonitor.yaml" \
-        -n "$NAMESPACE"
+        -n "$MONITORING_NAMESPACE"
     
     log_audit "service_monitors_configured" "ServiceMonitors configuration completed"
 }

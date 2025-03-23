@@ -1,18 +1,29 @@
 #!/bin/bash
 
+# Set project root
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+# Source the deployment utilities (includes configuration loading)
+source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+
+# Use the get_config_value function from the utility
+RESOURCE_GROUP_PREFIX=$(get_config_value "common.resource_group_prefix")
+echo "Resource group prefix: $RESOURCE_GROUP_PREFIX"
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+REGIONS_FILE=$(get_config_value "cloud_providers.azure.regions")
+VM_FAMILIES_FILE=$(get_config_value "cloud_providers.azure.vm_families")
+NETWORKS_FILE=$(get_config_value "cloud_providers.azure.networks")
+STORAGE_FILE=$(get_config_value "cloud_providers.azure.storage")
+
 # Log files for rollback states
 ROLLBACK_LOG="rollback.log"
 
-RESOURCE_GROUP_PREFIX="Besu-RG"
-
-# Function to clean up resources
-cleanup_resources() {
-    local resource_group=$1
-    local resource_name=$2
-    local resource_type=$3
-    local namespace=$4
-    az resource delete --resource-group "$resource_group" --name "$resource_name" --resource-type "$resource_type" --namespace "$namespace" --verbose
-}
+# Source the deployment-utils.sh if not already sourced
+if ! command -v cleanup_resources &> /dev/null; then
+    source "$(dirname "$0")/deployment/deployment-utils.sh"
+fi
 
 # Function to rollback deployment
 rollback_deployment() {
@@ -26,7 +37,7 @@ rollback_deployment() {
 }
 
 # Set the Azure subscription
-az account set --subscription "1bb1d10b-edf8-4d82-ade3-021a2b61f312"
+az account set --subscription "$(get_config_value "azure.subscription_id")"
 
 # Read resources from Azureresources (1).csv
 while IFS=, read -r name type resource_group location subscription namespace; do

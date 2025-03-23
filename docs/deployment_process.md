@@ -51,7 +51,7 @@ Each network type (Mainnet, Testnet, Devnet) has specific resource requirements 
 5. **Error Handling**
    - Log failed deployments
    - Attempt automatic retry for failed regions
-   - Clean up partial resources if needed
+   - Clean up partial resources if needed using the unified cleanup mechanism
    - Trigger notifications for failures
 
 6. **Monitoring**
@@ -69,6 +69,16 @@ The process generates several log files:
 - `success_regions.log`: Successfully deployed regions
 - `failed_regions.log`: Failed deployment regions
 - `rollback.log`: Resource cleanup operations
+- `audit.log`: Detailed audit trail including all cleanup operations
+
+## Cleanup Process
+The deployment includes a unified cleanup mechanism:
+1. Centralized in `deployment-utils.sh` for consistent implementation
+2. Used by both deployment and rollback scripts
+3. Supports two modes:
+   - Resource group level cleanup: `cleanup_resources <region>`
+   - Specific resource cleanup: `cleanup_resources <resource_group> <resource_name> <resource_type> <namespace>`
+4. All cleanup operations are logged in the audit log
 
 ## Deployment Steps
 

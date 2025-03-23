@@ -6,6 +6,16 @@ source $(dirname "$0")/deployment-utils.sh
 # Initialize logging
 setup_logging
 
+# Set project root
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+REGIONS_FILE=$(get_config_value "cloud_providers.azure.regions")
+VM_FAMILIES_FILE=$(get_config_value "cloud_providers.azure.vm_families")
+NETWORKS_FILE=$(get_config_value "cloud_providers.azure.networks")
+STORAGE_FILE=$(get_config_value "cloud_providers.azure.storage")
+
 # Constants
 SECURITY_CHECK_TIMEOUT=300 # 5 minutes
 

@@ -1,10 +1,20 @@
 #!/bin/bash
 
 # Set project root
-PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-# Source deployment utilities
+# Source the deployment utilities (includes configuration loading)
 source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+
+# Use the get_config_value function from the utility
+POD_SECURITY_LEVEL=$(get_config_value "common.security.pod_security_level.mainnet")
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+REGIONS_FILE=$(get_config_value "cloud_providers.azure.regions")
+VM_FAMILIES_FILE=$(get_config_value "cloud_providers.azure.vm_families")
+NETWORKS_FILE=$(get_config_value "cloud_providers.azure.networks")
+STORAGE_FILE=$(get_config_value "cloud_providers.azure.storage")
 
 # Parse command line arguments
 usage() {
@@ -259,7 +269,7 @@ if [ -n "$REGION" ]; then
 else
     # Configure security for all regions
     echo "🔒 Starting security hardening for $NETWORK in all regions..."
-    for region in $(az aks list --query "[].location" -o tsv | sort -u); do
+    for region in $(jq -r '.cloud_providers.azure.regions[]' "$REGIONS_FILE"); do
         echo "Configuring security in region: $region"
         configure_aks_security "$region" && \
         configure_key_vault "$region" && \

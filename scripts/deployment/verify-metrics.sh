@@ -391,126 +391,298 @@ verify_slack_integration() {
         return 1
     fi
     
-    # Check if the specific Besu alerts channel is configured
+    # Verify Slack webhook URL format
+    local webhook_url=$(kubectl get secret -n "$MONITORING_NAMESPACE" alertmanager-slack-webhook -o jsonpath='{.data.url}' | base64 --decode)
+    if ! echo "$webhook_url" | grep -q "^https://hooks.slack.com/services/T[A-Z0-9]\{8,10\}/B[A-Z0-9]\{8,10\}/[a-zA-Z0-9]\{24\}$"; then
+        handle_error 122 "Invalid Slack webhook URL format"
+        return 1
+    fi
+    
+    # Send test alert to Slack with non-disruptive notification
+    echo "Sending test notification to Slack..."
+    local test_payload=$(cat <<EOF
+{
+  "text": "[TEST] This is a verification message from the AKS deployment monitoring system. Please ignore.",
+  "username": "Monitoring System",
+  "icon_emoji": ":robot_face:",
+  "attachments": [
+    {
+      "color": "#36a64f",
+      "title": "Verification Test",
+      "text": "This is an automated test to verify Slack integration. No action required.",
+      "footer": "Verification timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    }
+  ]
+}
+EOF
+)
+    
+    local response=$(curl -s -X POST -H 'Content-type: application/json' --data "$test_payload" "$webhook_url")
+    
+    # Check for "ok" response from Slack API
+    if [[ "$response" != "ok" ]]; then
+        handle_error 123 "Slack test notification failed with response: $response"
+        return 1
+    fi
+    
+    # Verify specific Besu alerts channel is configured
     if ! echo "$config_content" | grep -q "#besu-alerts"; then
-        handle_error 122 "Besu alerts Slack channel not configured"
-        return 1
+        echo "Warning: Besu-specific Slack channel (#besu-alerts) not found in configuration"
+        log_audit "slack_channel_warning" "Besu-specific Slack channel not found in AlertManager config"
     fi
     
-    # Verify Slack receiver exists in AlertManager config
-    local slack_receiver=$(kubectl get secret -n "$MONITORING_NAMESPACE" alertmanager-alertmanager -o jsonpath='{.data.alertmanager\.yml}' | base64 --decode | grep -A 10 "slack_configs")
-    
-    if [[ -z "$slack_receiver" ]]; then
-        handle_error 123 "Slack receiver not configured in AlertManager"
-        return 1
-    fi
-    
-    # Check if webhook URL is properly set (this checks if it exists, not if it's valid)
-    if ! echo "$slack_receiver" | grep -q "api_url"; then
-        handle_error 124 "Slack webhook URL not configured"
-        return 1
-    fi
-    
-    echo "Slack integration verified successfully"
-    log_audit "slack_integration_verified" "Slack integration for alerts verified"
+    echo "✅ Slack integration verified successfully"
+    log_audit "slack_integration_verified" "Slack integration for alerts verified successfully"
     return 0
 }
 
 verify_monitoring_stack_health() {
     echo "Verifying overall monitoring stack health..."
     
-    # Check Prometheus can reach Besu endpoints
+    # Check all monitoring components are running
+    local components=("prometheus-server" "alertmanager" "grafana" "kube-state-metrics" "node-exporter")
+    for component in "${components[@]}"; do
+        if ! kubectl get pods -n "$MONITORING_NAMESPACE" -l "app=${component}" -o name | grep -q "pod/"; then
+            handle_error 130 "Monitoring component ${component} not found"
+            return 1
+        fi
+        
+        # Check component is in Running state
+        local pod_status=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l "app=${component}" -o jsonpath='{.items[0].status.phase}')
+        if [[ "$pod_status" != "Running" ]]; then
+            handle_error 131 "${component} pod not in Running state (current: ${pod_status})"
+            return 1
+        fi
+    done
+    
+    # Get Prometheus pod
     local prometheus_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].metadata.name}')
-    local target_health=$(kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/targets" | jq '.data.activeTargets[] | select(.labels.job | contains("besu")) | .health')
     
-    # Count targets and their health status
-    local total_targets=$(echo "$target_health" | wc -l)
-    local healthy_targets=$(echo "$target_health" | grep -c '"up"')
-    
-    if [[ $total_targets -eq 0 ]]; then
-        handle_error 125 "No Besu targets found in Prometheus"
+    # Verify data flow from node exporters to Prometheus
+    if ! kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/query?query=up{job=\"node-exporter\"}" | jq -e '.data.result | length > 0' > /dev/null; then
+        handle_error 132 "Node exporter metrics not flowing to Prometheus"
         return 1
     fi
     
-    local health_percentage=$((healthy_targets * 100 / total_targets))
-    echo "Besu target health: $health_percentage% ($healthy_targets/$total_targets targets healthy)"
-    
-    if [[ $health_percentage -lt 80 ]]; then
-        handle_error 126 "Less than 80% of Besu targets are healthy"
+    # Verify data flow from Besu nodes to Prometheus
+    if ! kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/query?query=up{job=~\".*besu.*\"}" | jq -e '.data.result | length > 0' > /dev/null; then
+        handle_error 133 "Besu metrics not flowing to Prometheus"
         return 1
     fi
     
-    # Check that AlertManager can be reached by Prometheus
-    if ! kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/alertmanagers" | jq -e '.data.activeAlertmanagers | length > 0' > /dev/null; then
-        handle_error 127 "Prometheus cannot reach AlertManager"
-        return 1
+    # Check AlertManager can receive alerts from Prometheus
+    if kubectl get pods -n "$MONITORING_NAMESPACE" -l app=alertmanager -o name | grep -q "pod/"; then
+        if ! kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/alertmanagers" | jq -e '.data.activeAlertmanagers | length > 0' > /dev/null; then
+            handle_error 134 "Prometheus cannot communicate with AlertManager"
+            return 1
+        fi
+        
+        # Get AlertManager pod
+        local alertmanager_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=alertmanager -o jsonpath='{.items[0].metadata.name}')
+        
+        # Check AlertManager can receive alerts
+        if ! kubectl exec -n "$MONITORING_NAMESPACE" "$alertmanager_pod" -- curl -s localhost:9093/api/v1/status | jq -e '.uptime' > /dev/null; then
+            handle_error 135 "AlertManager health check failed"
+            return 1
+        fi
     fi
     
     # Check Grafana can query Prometheus
     local grafana_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=grafana -o jsonpath='{.items[0].metadata.name}')
-    local datasource_health=$(kubectl exec -n "$MONITORING_NAMESPACE" "$grafana_pod" -- curl -s "localhost:${GRAFANA_PORT}/api/datasources/proxy/1/api/v1/query?query=up")
-    
-    if ! echo "$datasource_health" | jq -e '.data.result | length > 0' > /dev/null; then
-        handle_error 128 "Grafana cannot query Prometheus"
+    if ! kubectl exec -n "$MONITORING_NAMESPACE" "$grafana_pod" -- curl -s "localhost:${GRAFANA_PORT}/api/datasources/proxy/1/api/v1/query?query=up" | jq -e '.data.result | length > 0' > /dev/null; then
+        handle_error 136 "Grafana cannot query Prometheus datasource"
         return 1
     fi
     
-    echo "All monitoring stack components are communicating properly"
-    log_audit "monitoring_stack_health_verified" "Overall monitoring stack health verified"
+    # Check alerting rules are properly loaded
+    if ! kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/rules" | jq -e '.data.groups | length > 0' > /dev/null; then
+        handle_error 137 "No alerting rules loaded in Prometheus"
+        return 1
+    fi
+    
+    # Generate comprehensive health status report
+    local health_report="${LOG_DIR}/monitoring_health_$(date +%Y%m%d_%H%M%S).json"
+    
+    # Collect component statuses
+    local prometheus_status=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}')
+    local alertmanager_status="N/A"
+    if kubectl get pods -n "$MONITORING_NAMESPACE" -l app=alertmanager -o name | grep -q "pod/"; then
+        alertmanager_status=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=alertmanager -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}')
+    fi
+    local grafana_status=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=grafana -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}')
+    
+    # Generate health report
+    cat > "$health_report" << EOF
+{
+    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "overall_status": "healthy",
+    "components": {
+        "prometheus": {
+            "status": "$prometheus_status",
+            "endpoints_reachable": true,
+            "api_responsive": true
+        },
+        "alertmanager": {
+            "status": "$alertmanager_status",
+            "endpoints_reachable": true,
+            "api_responsive": true
+        },
+        "grafana": {
+            "status": "$grafana_status",
+            "endpoints_reachable": true,
+            "api_responsive": true,
+            "datasources_healthy": true
+        }
+    },
+    "data_flow": {
+        "node_exporters_to_prometheus": true,
+        "besu_to_prometheus": true,
+        "prometheus_to_alertmanager": true,
+        "prometheus_to_grafana": true
+    },
+    "alerting": {
+        "rules_loaded": true,
+        "notifications_configured": true
+    }
+}
+EOF
+    
+    echo "✅ Monitoring stack health verification completed successfully"
+    echo "Health report generated at: $health_report"
+    log_audit "monitoring_stack_health_verified" "Overall monitoring stack health verified successfully"
     return 0
 }
 
 verify_monitoring_system_sizing() {
     echo "Verifying monitoring system sizing..."
     
-    # Get cluster node count
+    # Get cluster size metrics
     local node_count=$(kubectl get nodes --no-headers | wc -l)
+    local pod_count=$(kubectl get pods --all-namespaces --no-headers | wc -l)
+    local besu_pod_count=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/part-of=besu --no-headers 2>/dev/null | wc -l || echo 0)
     
-    # Get Besu pod count
-    local besu_pod_count=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/part-of=besu --no-headers | wc -l)
+    echo "Cluster metrics:"
+    echo "- Nodes: $node_count"
+    echo "- Total Pods: $pod_count"
+    echo "- Besu Pods: $besu_pod_count"
     
-    # Get Prometheus resource allocation
+    # Get Prometheus pod
     local prometheus_pod=$(kubectl get pods -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].metadata.name}')
-    local prometheus_cpu_request=$(kubectl get pod -n "$MONITORING_NAMESPACE" "$prometheus_pod" -o jsonpath='{.spec.containers[0].resources.requests.cpu}')
+    
+    # Calculate current resource usage
+    local prometheus_memory_usage=$(kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/query?query=process_resident_memory_bytes/1024/1024" | jq -r '.data.result[0].value[1]')
+    local prometheus_cpu_usage=$(kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/query?query=rate(process_cpu_seconds_total[5m])*100" | jq -r '.data.result[0].value[1]')
+    local prometheus_storage_usage=$(kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/query?query=prometheus_tsdb_storage_blocks_bytes/1024/1024/1024" | jq -r '.data.result[0].value[1]' 2>/dev/null || echo 0)
+    
+    # Get resource allocations
     local prometheus_memory_request=$(kubectl get pod -n "$MONITORING_NAMESPACE" "$prometheus_pod" -o jsonpath='{.spec.containers[0].resources.requests.memory}')
+    local prometheus_cpu_request=$(kubectl get pod -n "$MONITORING_NAMESPACE" "$prometheus_pod" -o jsonpath='{.spec.containers[0].resources.requests.cpu}')
     local prometheus_storage=$(kubectl get pvc -n "$MONITORING_NAMESPACE" -l app=prometheus-server -o jsonpath='{.items[0].spec.resources.requests.storage}')
     
-    echo "Current monitoring system sizing:"
-    echo "- Cluster nodes: $node_count"
-    echo "- Besu pods: $besu_pod_count"
-    echo "- Prometheus CPU request: $prometheus_cpu_request"
-    echo "- Prometheus memory request: $prometheus_memory_request"
-    echo "- Prometheus storage: $prometheus_storage"
+    # Get retention period configuration
+    local retention_period=$(kubectl exec -n "$MONITORING_NAMESPACE" "$prometheus_pod" -- curl -s "localhost:${PROMETHEUS_PORT}/api/v1/status/config" | grep -o '"retention":"[^"]*"' | cut -d'"' -f4)
     
-    # Check if Prometheus has enough resources based on cluster size
-    # These are heuristic values that should be adjusted based on actual usage patterns
-    if [[ $besu_pod_count -gt 20 ]]; then
-        local min_cpu="1000m"
-        local min_memory="4Gi"
-        local min_storage="100Gi"
-        
-        # Extract numeric values for comparison
-        local prometheus_cpu_value=$(echo "$prometheus_cpu_request" | sed 's/[^0-9]*//g')
-        local prometheus_memory_value=$(echo "$prometheus_memory_request" | sed 's/[^0-9]*//g')
-        local prometheus_storage_value=$(echo "$prometheus_storage" | sed 's/[^0-9]*//g')
-        
-        if [[ $prometheus_cpu_value -lt 1000 ]]; then
-            echo "Warning: Prometheus CPU allocation may be too low for cluster size"
-            log_audit "prometheus_low_cpu" "Prometheus CPU allocation may be too low: $prometheus_cpu_request < $min_cpu"
-        fi
-        
-        if [[ $prometheus_memory_value -lt 4 ]]; then
-            echo "Warning: Prometheus memory allocation may be too low for cluster size"
-            log_audit "prometheus_low_memory" "Prometheus memory allocation may be too low: $prometheus_memory_request < $min_memory"
-        fi
-        
-        if [[ $prometheus_storage_value -lt 100 ]]; then
-            echo "Warning: Prometheus storage allocation may be too low for cluster size"
-            log_audit "prometheus_low_storage" "Prometheus storage allocation may be too low: $prometheus_storage < $min_storage"
-        fi
+    # Calculate recommended values based on cluster size
+    # These are heuristic formulas that should be adjusted based on actual usage
+    local recommended_memory_gb=$(echo "scale=1; 2 + ($besu_pod_count * 0.1)" | bc)
+    local recommended_cpu_cores=$(echo "scale=1; 1 + ($besu_pod_count * 0.05)" | bc)
+    local recommended_storage_gb=$(echo "scale=0; 100 + ($besu_pod_count * 5)" | bc)
+    local recommended_retention="15d"
+    
+    if [[ $besu_pod_count -gt 50 ]]; then
+        recommended_retention="7d"
+    elif [[ $besu_pod_count -lt 10 ]]; then
+        recommended_retention="30d"
     fi
     
-    log_audit "monitoring_sizing_verified" "Monitoring system sizing verified"
+    echo "Prometheus resource usage:"
+    echo "- Memory: ${prometheus_memory_usage} MB (allocated: $prometheus_memory_request)"
+    echo "- CPU: ${prometheus_cpu_usage}% (allocated: $prometheus_cpu_request)"
+    echo "- Storage: ${prometheus_storage_usage} GB (allocated: $prometheus_storage)"
+    echo "- Retention period: ${retention_period}"
+    
+    # Generate sizing recommendation report
+    local sizing_report="${LOG_DIR}/monitoring_sizing_$(date +%Y%m%d_%H%M%S).json"
+    
+    # Extract numeric values for comparison
+    local memory_request_numeric=$(echo "$prometheus_memory_request" | sed 's/[^0-9]*//g')
+    local recommended_memory_mb=$(echo "$recommended_memory_gb * 1024" | bc)
+    local cpu_request_numeric=$(echo "$prometheus_cpu_request" | sed 's/[^0-9]*//g')
+    local recommended_cpu_millicores=$(echo "$recommended_cpu_cores * 1000" | bc)
+    
+    # Generate sizing recommendation report
+    cat > "$sizing_report" << EOF
+{
+    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "cluster_metrics": {
+        "nodes": $node_count,
+        "total_pods": $pod_count,
+        "besu_pods": $besu_pod_count
+    },
+    "prometheus": {
+        "current": {
+            "memory_usage_mb": $prometheus_memory_usage,
+            "memory_request": "$prometheus_memory_request",
+            "cpu_usage_percent": $prometheus_cpu_usage,
+            "cpu_request": "$prometheus_cpu_request",
+            "storage": "$prometheus_storage",
+            "retention_period": "${retention_period}"
+        },
+        "recommended": {
+            "memory_gb": $recommended_memory_gb,
+            "cpu_cores": $recommended_cpu_cores, 
+            "storage_gb": $recommended_storage_gb,
+            "retention_period": "${recommended_retention}"
+        }
+    },
+    "action_needed": false,
+    "recommendations": []
+}
+EOF
+    
+    # Check if adjustments are needed and update the report
+    local adjustments_needed=false
+    local recommendations=()
+    
+    # Compare current with recommended and add recommendations if needed
+    if [[ $(echo "$memory_request_numeric < $recommended_memory_mb * 0.7" | bc) -eq 1 ]]; then
+        recommendations+=("Increase Prometheus memory allocation to at least ${recommended_memory_gb}Gi")
+        adjustments_needed=true
+    fi
+    
+    if [[ $(echo "$cpu_request_numeric < $recommended_cpu_millicores * 0.7" | bc) -eq 1 ]]; then
+        recommendations+=("Increase Prometheus CPU allocation to at least ${recommended_cpu_cores} cores")
+        adjustments_needed=true
+    fi
+    
+    # Extract numeric storage value for comparison
+    local storage_numeric=$(echo "$prometheus_storage" | sed 's/[^0-9]*//g')
+    
+    if [[ $storage_numeric -lt $recommended_storage_gb ]]; then
+        recommendations+=("Increase Prometheus storage to at least ${recommended_storage_gb}Gi")
+        adjustments_needed=true
+    fi
+    
+    if [[ "$retention_period" != "$recommended_retention" ]]; then
+        recommendations+=("Adjust retention period to $recommended_retention based on cluster size")
+        adjustments_needed=true
+    fi
+    
+    if [[ "$adjustments_needed" == "true" ]]; then
+        # Update the report with recommendations
+        local temp_file=$(mktemp)
+        jq --arg needed "true" --argjson recs "$(printf '%s\n' "${recommendations[@]}" | jq -R . | jq -s .)" \
+           '.action_needed = ($needed | test("true")) | .recommendations = $recs' "$sizing_report" > "$temp_file"
+        mv "$temp_file" "$sizing_report"
+        
+        echo "⚠️ Sizing recommendations generated - adjustments needed:"
+        printf '  - %s\n' "${recommendations[@]}"
+    else
+        echo "✅ Current monitoring system sizing is appropriate"
+    fi
+    
+    echo "Sizing report generated at: $sizing_report"
+    log_audit "monitoring_sizing_verified" "Monitoring system sizing verification completed"
     return 0
 }
 

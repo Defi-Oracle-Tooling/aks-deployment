@@ -3,9 +3,56 @@
 # Set project root
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-# Set variables
-REGIONS_FILE="${PROJECT_ROOT}/infrastructure/configs/regions.json"
-VM_FAMILIES_FILE="${PROJECT_ROOT}/infrastructure/configs/vm_families.json"
+# Source the deployment utilities (includes configuration loading)
+source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+
+# Use the get_config_value function from the utility
+AZURE_REGIONS=$(get_config_value "cloud_providers.azure.regions")
+echo "Deploying to Azure regions: $AZURE_REGIONS"
+
+# Create config directory
+mkdir -p config
+
+# Move existing configuration files
+mv infrastructure/configs/regions.json config/
+mv infrastructure/configs/vm_families.json config/
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+
+# Azure configuration paths
+AZURE_REGIONS_FILE=$(jq -r '.azure.regions' "$CONFIG_PATHS_FILE")
+AZURE_VM_FAMILIES_FILE=$(jq -r '.azure.vm_families' "$CONFIG_PATHS_FILE")
+AZURE_NETWORKS_FILE=$(jq -r '.azure.networks' "$CONFIG_PATHS_FILE")
+AZURE_STORAGE_FILE=$(jq -r '.azure.storage' "$CONFIG_PATHS_FILE")
+
+# AWS configuration paths
+AWS_REGIONS_FILE=$(jq -r '.aws.regions' "$CONFIG_PATHS_FILE")
+AWS_INSTANCE_TYPES_FILE=$(jq -r '.aws.instance_types' "$CONFIG_PATHS_FILE")
+AWS_NETWORKS_FILE=$(jq -r '.aws.networks' "$CONFIG_PATHS_FILE")
+AWS_STORAGE_FILE=$(jq -r '.aws.storage' "$CONFIG_PATHS_FILE")
+
+# GCP configuration paths
+GCP_REGIONS_FILE=$(jq -r '.gcp.regions' "$CONFIG_PATHS_FILE")
+GCP_MACHINE_TYPES_FILE=$(jq -r '.gcp.machine_types' "$CONFIG_PATHS_FILE")
+GCP_NETWORKS_FILE=$(jq -r '.gcp.networks' "$CONFIG_PATHS_FILE")
+GCP_STORAGE_FILE=$(jq -r '.gcp.storage' "$CONFIG_PATHS_FILE")
+
+# Common configuration paths
+LOGGING_FILE=$(jq -r '.common.logging' "$CONFIG_PATHS_FILE")
+MONITORING_FILE=$(jq -r '.common.monitoring' "$CONFIG_PATHS_FILE")
+SECURITY_FILE=$(jq -r '.common.security' "$CONFIG_PATHS_FILE")
+
+# Environment configuration paths
+PRODUCTION_ENV_FILE=$(jq -r '.environments.production' "$CONFIG_PATHS_FILE")
+STAGING_ENV_FILE=$(jq -r '.environments.staging' "$CONFIG_PATHS_FILE")
+DEVELOPMENT_ENV_FILE=$(jq -r '.environments.development' "$CONFIG_PATHS_FILE")
+
+# GitHub configuration paths
+GITHUB_ACTIONS_FILE=$(jq -r '.github.actions' "$CONFIG_PATHS_FILE")
+GITHUB_SECRETS_FILE=$(jq -r '.github.secrets' "$CONFIG_PATHS_FILE")
+
+# Log files
 SUCCESS_FILE="success_regions.log"
 FAILED_FILE="failed_regions.log"
 LOG_FILE="deployment.log"
@@ -29,22 +76,23 @@ done
 
 # Default to mainnet if not specified
 NETWORK=${NETWORK:-mainnet}
-CHAIN_ID=$(jq -r ".environments.$NETWORK.chainId" "$VM_FAMILIES_FILE")
-NETWORK_NAME=$(jq -r ".environments.$NETWORK.networkName" "$VM_FAMILIES_FILE")
+CHAIN_ID=$(jq -r ".environments.$NETWORK.chainId" "$AZURE_VM_FAMILIES_FILE")
+NETWORK_NAME=$(jq -r ".environments.$NETWORK.networkName" "$AZURE_VM_FAMILIES_FILE")
 
 echo "" > $FAILED_FILE
 
-# Check if files exist and are valid JSON
-for file in "$REGIONS_FILE" "$VM_FAMILIES_FILE"; do
+# Load network-specific configurations
+for file in "$AZURE_REGIONS_FILE" "$AZURE_VM_FAMILIES_FILE"; do
     if [[ ! -f $file ]] || ! jq empty "$file" 2>/dev/null; then
         echo "Error: $file not found or invalid JSON" | tee -a $LOG_FILE
         exit 1
     fi
+    echo "Loaded configuration from $file" | tee -a $LOG_FILE
 done
 
 # Log deployment start
 echo "Starting deployment for $NETWORK_NAME (Chain ID: $CHAIN_ID)" | tee -a $LOG_FILE
-echo "Minimum nodes required: $(jq -r ".metadata.networks.$NETWORK.minNodes" "$VM_FAMILIES_FILE")" | tee -a $LOG_FILE
+echo "Minimum nodes required: $(jq -r ".metadata.networks.$NETWORK.minNodes" "$AZURE_VM_FAMILIES_FILE")" | tee -a $LOG_FILE
 
 # Function to check if a region is already successfully deployed
 is_region_deployed() {
@@ -114,6 +162,38 @@ get_instance_size() {
     echo ""
 }
 
+# Function to determine optimal instance size based on network type (generic and referenced implementation)
+get_instance_size_generic() {
+    local vCPU_LIMIT=$1
+    local NETWORK=$2
+    local NODE_TYPE=$3
+    local CONFIG_FILE=$4
+
+    local instance_info=$(jq -r ".${NETWORK}.${NODE_TYPE}[] | select(.vCPU <= ${vCPU_LIMIT}) | .family, .nodes" ${CONFIG_FILE} | tail -n 2)
+
+    if [[ -n $instance_info ]]; then
+        echo "$instance_info"
+    else
+        echo ""
+    fi
+}
+
+# Generic method to get instance size
+get_generic_instance_size() {
+    local vCPU_LIMIT=$1
+    local NETWORK=$2
+    local NODE_TYPE=$3
+    local CONFIG_FILE=$4
+
+    local instance_info=$(jq -r ".environments.$NETWORK.nodeTypes.$NODE_TYPE | select(.vCPULimit <= $vCPU_LIMIT) | .vmFamily, .nodeCount" "$CONFIG_FILE")
+
+    if [[ -z $instance_info ]]; then
+        echo ""
+    else
+        echo "$instance_info"
+    fi
+}
+
 # Function to check if a resource group exists
 check_resource_group_exists() {
     local region=$1
@@ -173,7 +253,7 @@ deploy_validator_nodes() {
 deploy_to_region() {
     local region=$1
     local NETWORK=$2
-    
+
     if is_region_deployed "$region"; then
         echo "Region $region already deployed successfully. Skipping..." | tee -a $LOG_FILE
         return
@@ -182,23 +262,23 @@ deploy_to_region() {
     echo "🚀 Deploying AKS in $region for $NETWORK..." | tee -a $LOG_FILE
 
     # Get minimum nodes required for this network
-    MIN_NODES=$(jq -r ".metadata.networks.$NETWORK.minNodes" "$VM_FAMILIES_FILE")
-    
+    MIN_NODES=$(jq -r ".metadata.networks.$NETWORK.minNodes" "$AZURE_VM_FAMILIES_FILE")
+
     # Check quotas for each node type
     for NODE_TYPE in "validator" "bootnode" "rpc"; do
         vCPU_LIMIT=$(fetch_vcpu_quota $region)
-        instance_info=$(get_instance_size $vCPU_LIMIT "$NETWORK" "$NODE_TYPE")
-        
+        instance_info=$(get_generic_instance_size $vCPU_LIMIT "$NETWORK" "$NODE_TYPE" "$AZURE_VM_FAMILIES_FILE")
+
         if [[ -z $instance_info ]]; then
             echo "⚠️ Skipping $region: Not enough vCPUs for $NODE_TYPE nodes ($vCPU_LIMIT needed)" | tee -a $FAILED_FILE $LOG_FILE
             return 1
         fi
-        
+
         VM_SIZE=$(echo $instance_info | cut -d' ' -f1)
         NODE_COUNT=$(echo $instance_info | cut -d' ' -f2)
-        
+
         echo "📌 Region: $region | Node Type: $NODE_TYPE | VM Size: $VM_SIZE | Nodes: $NODE_COUNT" | tee -a $LOG_FILE
-        
+
         # Rest of the deployment logic
         if is_cluster_healthy "$RESOURCE_GROUP_PREFIX-$region" "$AKS_CLUSTER_PREFIX-$region"; then
             echo "AKS cluster in region $region is already healthy. Skipping deployment..." | tee -a $LOG_FILE
@@ -222,10 +302,10 @@ deploy_to_region() {
 }
 
 # Function to clean up partially created resources
-cleanup_resources() {
-    local region=$1
-    az group delete --name "$RESOURCE_GROUP_PREFIX-$region" --yes --no-wait
-}
+# This is now a wrapper around the unified function in deployment-utils.sh
+if ! command -v cleanup_resources &> /dev/null; then
+    source "${PROJECT_ROOT}/scripts/deployment/deployment-utils.sh"
+fi
 
 # Function to rollback deployment
 rollback_deployment() {
@@ -240,6 +320,8 @@ export -f is_region_deployed
 export -f is_cluster_healthy
 export -f fetch_vcpu_quota
 export -f get_instance_size
+export -f get_instance_size_generic
+export -f get_generic_instance_size
 export -f create_resource_group
 export -f deploy_aks
 export -f deploy_validator_nodes
@@ -247,11 +329,11 @@ export -f deploy_to_region
 export -f cleanup_resources
 export -f rollback_deployment
 
-jq -r ".regions[] | select(.enabled == true) | .name" "$REGIONS_FILE" | while read -r region; do
+jq -r ".regions[] | select(.enabled == true) | .name" "$AZURE_REGIONS_FILE" | while read -r region; do
     echo "Deploying to $region for $NETWORK_NAME..." | tee -a $LOG_FILE
     
     # Get VM family configuration for the current network
-    vm_family_config=$(jq -r ".environments.$NETWORK.vmFamilies[] | select(.recommended == true) | .name" "$VM_FAMILIES_FILE" | head -n 1)
+    vm_family_config=$(jq -r ".environments.$NETWORK.vmFamilies[] | select(.recommended == true) | .name" "$AZURE_VM_FAMILIES_FILE" | head -n 1)
     
     if deploy_to_region "$region" "$vm_family_config" "$NETWORK"; then
         echo "$region" >> "$SUCCESS_FILE"

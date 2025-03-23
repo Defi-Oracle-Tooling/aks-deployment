@@ -70,6 +70,15 @@ This script deploys Azure Kubernetes Service (AKS) clusters to multiple regions 
 - **Logging:** The script logs detailed deployment process in `deployment.log`.
 - **Cleanup:** The script cleans up partially created resources in case of deployment failures.
 - **Notification:** The script notifies the team about the deployment status, including both successes and failures.
+- **Cleanup:** The script provides a unified cleanup mechanism to remove resources in case of deployment failures. The cleanup functionality:
+  - Is centralized in the `scripts/deployment/deployment-utils.sh` file
+  - Can remove entire resource groups or individual resources
+  - Logs all cleanup operations to the audit log
+  - Is used by both the deployment and rollback scripts
+  - Handles both resource group level and specific resource cleanup
+  - Logs all cleanup operations to the audit log
+  - Is centralized in the deployment-utils.sh file for consistent behavior
+  - Can be triggered automatically on failure or manually through dedicated commands
 
 ## Usage
 1. Ensure `regions.txt` contains the list of regions to deploy to.

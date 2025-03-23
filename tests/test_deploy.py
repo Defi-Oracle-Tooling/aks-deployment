@@ -27,6 +27,23 @@ def test_cleanup_function():
     result = subprocess.run(['./deploy.sh'], capture_output=True, text=True)
     assert 'cleanup_resources' in result.stdout, "Cleanup function did not run"
 
+def test_cleanup_function_execution():
+    # This test ensures the unified cleanup function in deployment-utils.sh works correctly
+    result = subprocess.run(['bash', '-c', 'source ./scripts/deployment/deployment-utils.sh && cleanup_resources "testregion"'], 
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    
+    assert result.returncode == 0, "Cleanup function execution failed"
+    assert 'cleanup_started' in result.stdout, "Cleanup function did not log start"
+    assert 'resource group' in result.stdout, "Resource group cleanup message not found"
+
+# Add a new test for the specific resource cleanup path
+def test_specific_resource_cleanup():
+    result = subprocess.run(['bash', '-c', 'source ./scripts/deployment/deployment-utils.sh && cleanup_resources "test-rg" "test-resource" "Microsoft.Test/testResource" "default"'], 
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    
+    assert result.returncode == 0, "Specific resource cleanup execution failed"
+    assert 'Cleaning up resource test-resource' in result.stdout, "Specific resource cleanup message not found"
+
 # Test if the notification mechanism works
 def test_notification_mechanism():
     result = subprocess.run(['./deploy.sh'], capture_output=True, text=True)

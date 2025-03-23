@@ -1,5 +1,33 @@
 #!/bin/bash
 
+# Set project root and config file path
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
+CONFIG_FILE="${PROJECT_ROOT}/config/dynamic_config.json"
+
+# Ensure configuration file is available
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file $CONFIG_FILE not found"
+    exit 1
+fi
+
+# Function to query a value from the configuration file
+# Usage: get_config_value "cloud_providers.azure.regions"
+get_config_value() {
+    local key="$1"
+    jq -r ".$key" "$CONFIG_FILE"
+}
+
+# Example: load Azure regions into a variable
+AZURE_REGIONS=$(get_config_value "cloud_providers.azure.regions")
+echo "Azure regions: $AZURE_REGIONS"
+
+# Load configuration paths
+CONFIG_PATHS_FILE="${PROJECT_ROOT}/config/configuration_paths.json"
+REGIONS_FILE=$(jq -r '.cloud_providers.azure.regions' "$CONFIG_PATHS_FILE")
+VM_FAMILIES_FILE=$(jq -r '.cloud_providers.azure.vm_families' "$CONFIG_PATHS_FILE")
+NETWORKS_FILE=$(jq -r '.cloud_providers.azure.networks' "$CONFIG_PATHS_FILE")
+STORAGE_FILE=$(jq -r '.cloud_providers.azure.storage' "$CONFIG_PATHS_FILE")
+
 # Constants for logging
 LOG_DIR="/var/log/besu"
 DEPLOYMENT_LOG="${LOG_DIR}/deployment.log"
@@ -34,7 +62,7 @@ collect_metrics() {
     
     # Collect node metrics
     local metrics=$(az monitor metrics list \
-        --resource "${AKS_CLUSTER_PREFIX}-${region}" \
+        --resource "$(get_config_value "aks_cluster_prefix")-${region}" \
         --resource-type "Microsoft.ContainerService/managedClusters" \
         --metric "node_cpu_usage_percentage" "node_memory_working_set_percentage" \
         --output json)
@@ -49,8 +77,8 @@ check_node_health() {
     
     # Check node status
     local status=$(az aks show \
-        --resource-group "${RESOURCE_GROUP_PREFIX}-${region}" \
-        --name "${AKS_CLUSTER_PREFIX}-${region}" \
+        --resource-group "$(get_config_value "resource_group_prefix")-${region}" \
+        --name "$(get_config_value "aks_cluster_prefix")-${region}" \
         --query "agentPoolProfiles[?name=='${node_type}'].provisioningState" \
         --output tsv)
     
@@ -77,7 +105,7 @@ monitor_performance() {
     
     # Monitor key performance indicators
     az monitor metrics list \
-        --resource "${AKS_CLUSTER_PREFIX}-${region}" \
+        --resource "$(get_config_value "aks_cluster_prefix")-${region}" \
         --metric "kube_pod_status_ready" "kube_node_status_condition" \
         --output json >> "${LOG_DIR}/performance/${region}_metrics.json"
 }
@@ -91,7 +119,7 @@ trigger_alert() {
     # Send to Azure Monitor
     az monitor metrics alert create \
         --name "BesuAlert-${timestamp}" \
-        --resource-group "${RESOURCE_GROUP_PREFIX}" \
+        --resource-group "$(get_config_value "resource_group_prefix")" \
         --condition "type=static" \
         --description "${message}" \
         --severity "${severity}"
@@ -99,15 +127,31 @@ trigger_alert() {
 
 # Resource cleanup
 cleanup_resources() {
-    local region=$1
-    log_audit "cleanup_started" "Cleaning up resources in ${region}"
-    
-    # Perform cleanup
-    az group delete \
-        --name "${RESOURCE_GROUP_PREFIX}-${region}" \
-        --yes --no-wait
-    
-    log_audit "cleanup_completed" "Cleanup completed for ${region}"
+    # Handle both resource group level and specific resource cleanup
+    if [ "$#" -eq 1 ]; then
+        # Resource group level cleanup (from deploy.sh)
+        local region=$1
+        local resource_group="rg-aks-${region}"
+        
+        log_audit "cleanup_started" "Cleaning up all resources in resource group ${resource_group}"
+        echo "Initiating cleanup of resource group ${resource_group}..."
+        az group delete --name "${resource_group}" --yes --no-wait || true
+        log_audit "cleanup_completed" "Initiated deletion of resource group ${resource_group}"
+    elif [ "$#" -eq 4 ]; then
+        # Specific resource cleanup (from rollback.sh)
+        local resource_group=$1
+        local resource_name=$2
+        local resource_type=$3
+        local namespace=$4
+        
+        log_audit "cleanup_started" "Cleaning up resource ${resource_name} of type ${resource_type} in ${resource_group}"
+        echo "Deleting resource ${resource_name} of type ${resource_type}..."
+        az resource delete --resource-group "${resource_group}" --name "${resource_name}" --resource-type "${resource_type}" || true
+        log_audit "cleanup_completed" "Deleted resource ${resource_name} in ${resource_group}"
+    else
+        handle_error 45 "Invalid number of parameters for cleanup_resources: $#"
+        echo "Usage: cleanup_resources <region> OR cleanup_resources <resource_group> <resource_name> <resource_type> <namespace>"
+    fi
 }
 
 # Export functions
