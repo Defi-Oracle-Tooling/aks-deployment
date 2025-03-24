@@ -36,29 +36,56 @@ The Master Configurator is an overarching tool that integrates various configura
 - **[master_configurator.md](./Technical_Master_Plan/master_configurator.md)**
 
 #### 3. System Design
-Each component's system design is meticulously documented in their respective markdown files. This includes:
+The system design for the AKS-Deployment-1 repository follows a modular architecture that promotes scalability, maintainability, and interoperability between its components. Each component is designed with specific responsibilities while maintaining compatibility with the overall system.
 
-### 3.1 Architecture
+##### 3.1 Overall System Architecture
+- **Microservices Architecture**: The system utilizes a microservices approach, with each configurator functioning as an independent service.
+- **API Gateway**: A central API gateway manages requests and routes them to appropriate configurator services.
+- **Shared Data Layer**: Common data and configurations are accessible through a shared data layer.
+
+##### 3.2 Component-Specific System Designs
+Each component has its detailed system design documentation:
+
+- **[blockchain_configurator_design.md](./system_design/blockchain_configurator_design.md)**
+- **[blockchain_selection_tool_design.md](./system_design/blockchain_selection_tool_design.md)**
+- **[clouds_provider_configurator_design.md](./system_design/clouds_provider_configurator_design.md)**
+- **[github_configurator_design.md](./system_design/github_configurator_design.md)**
+- **[industry_clouds_configurator_design.md](./system_design/industry_clouds_configurator_design.md)**
+- **[master_configurator_design.md](./system_design/master_configurator_design.md)**
+
+##### 3.3 Integration Patterns
+- **Event-Driven Communication**: Components communicate via events using a message broker.
+- **RESTful APIs**: Each component exposes RESTful APIs for synchronous communication.
+- **GraphQL Endpoints**: Complex data queries are handled through GraphQL endpoints.
+
+##### 3.4 Security Design
+- **Authentication & Authorization**: OAuth2.0 and RBAC implementation across services.
+- **Data Encryption**: End-to-end encryption for sensitive configuration data.
+- **Security Compliance**: Adherence to industry security standards and best practices.
+
+For detailed architectural diagrams, data flows, and UI/UX designs, refer to the component-specific design documents linked above.
+
+##### 3.5 Architecture
 - **High-Level Architecture Diagrams**: Visual representations of the overall architecture, showing how different components interact.
 - **Component Interactions**: Detailed descriptions of how individual components communicate and work together to achieve the system’s objectives.
 
-### 3.2 Data Flow
+##### 3.6 Data Flow
 - **Data Flow Diagrams**: Illustrations showing how data moves through the system from input to output.
 - **Data Handling Procedures**: Descriptions of how data is processed, stored, and retrieved within the system.
 
-### 3.3 User Interface
+##### 3.7 User Interface
 - **Wireframes and Mockups**: Visual guides representing the layout and functionality of the user interface.
 - **User Interaction Flow**: Step-by-step processes showing how users will navigate and interact with the system.
 
 #### 4. Development Plan
 The development plan for each component is outlined in the respective markdown files. It includes:
 
-### 4.1 Technology Stack
+##### 4.1 Technology Stack
 - **Front-End Technologies**: HTML, CSS, JavaScript, React.
 - **Back-End Technologies**: Node.js, Express.
 - **Database Technologies**: MongoDB or PostgreSQL.
 
-### 4.2 Development Phases
+##### 4.2 Development Phases
 - **Phase 1: Requirements Gathering and Analysis**: Collecting and analyzing requirements to understand the project's needs.
 - **Phase 2: Design and Prototyping**: Creating design documents and prototypes to visualize the solution.
 - **Phase 3: Implementation and Development**: Writing code and developing the system based on the design.
@@ -68,46 +95,46 @@ The development plan for each component is outlined in the respective markdown f
 #### 5. Testing Plan
 The testing plan for each component includes:
 
-### 5.1 Unit Testing
+##### 5.1 Unit Testing
 - **Component-Level Tests**: Testing individual components to ensure they function correctly in isolation.
 
-### 5.2 Integration Testing
+##### 5.2 Integration Testing
 - **Component Interaction Tests**: Testing how components interact with each other to ensure they work together seamlessly.
 
-### 5.3 User Acceptance Testing (UAT)
+##### 5.3 User Acceptance Testing (UAT)
 - **End-User Testing**: Conducting tests with end-users to gather feedback and ensure the system meets their needs and expectations.
 
 #### 6. Deployment Plan
 The deployment plan for each component includes:
 
-### 6.1 Environment Setup
+##### 6.1 Environment Setup
 - **Development Environment**: Setting up the environment for developers to work on the project.
 - **Staging Environment**: Setting up a pre-production environment for testing.
 - **Production Environment**: Setting up the live environment where the system will be used.
 
-### 6.2 Deployment Strategy
+##### 6.2 Deployment Strategy
 - **CI/CD Pipeline**: Implementing a Continuous Integration and Continuous Deployment pipeline to automate the deployment process.
 - **Rollback Plan**: Developing a plan to revert to a previous version in case of deployment failures.
 
 #### 7. Maintenance Plan
 The maintenance plan for each component includes:
 
-### 7.1 Monitoring and Logging
+##### 7.1 Monitoring and Logging
 - **Monitoring Tools**: Implementing tools to monitor system performance and health.
 - **Logging Mechanisms**: Setting up logging to track system activity and diagnose issues.
 
-### 7.2 Bug Fixes and Updates
+##### 7.2 Bug Fixes and Updates
 - **Regular Updates**: Providing regular updates to address bugs and improve functionality.
 - **Patch Management**: Managing patches to fix vulnerabilities and ensure system security.
 
 #### 8. Documentation
 Comprehensive documentation for each component is provided in the respective markdown files. This includes:
 
-### 8.1 User Documentation
+##### 8.1 User Documentation
 - **User Guides**: Step-by-step guides to help users understand and use the system.
 - **Tutorials**: Detailed tutorials to assist users in performing specific tasks.
 
-### 8.2 Technical Documentation
+##### 8.2 Technical Documentation
 - **API Documentation**: Detailed documentation of the system’s API, including endpoints, parameters, and examples.
 - **Architecture Diagrams**: Visual representations of the system’s architecture.
 - **Design Documents**: Detailed design documents explaining the system’s structure and components.
@@ -115,10 +142,10 @@ Comprehensive documentation for each component is provided in the respective mar
 #### 9. Timeline and Milestones
 The project timeline and milestones for each component are detailed in the respective markdown files. This includes:
 
-### 9.1 Project Timeline
+##### 9.1 Project Timeline
 - **Detailed Timeline**: A timeline with specific milestones and deadlines for each phase of the project.
 
-### 9.2 Milestones
+##### 9.2 Milestones
 - **Key Milestones**: Important milestones such as requirements finalization, design completion, development completion, testing completion, and deployment.
 
 ### Conclusion
