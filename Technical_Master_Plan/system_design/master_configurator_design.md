@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-The Master Configurator serves as the central integration point for all configuration tools in the AKS-Deployment-1 repository. It provides a unified interface and orchestrates the workflow across the specialized configurators (Blockchain, Cloud Provider, GitHub, Industry Clouds) to create comprehensive deployment configurations.
+The Master Configurator serves as the central integration point for all configuration tools in the ABCDEfGHIJKL repository. It provides a unified interface and orchestrates the workflow across the specialized configurators (Blockchain, Cloud Provider, GitHub, Industry Clouds) to create comprehensive deployment configurations.
 
 ## 2. Architecture
 

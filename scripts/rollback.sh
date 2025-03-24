@@ -80,7 +80,7 @@ while IFS=, read -r name type resource_group location subscription namespace; do
         esac
         rollback_deployment "$resource_group" "$name" "$resource_type" "$namespace"
     fi
-done < /Users/pandora/VS_Code_Projects/aks-deployment-1/Azureresources\ \(1\).csv
+done < /Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/Azureresources\ \(1\).csv
 
 # Notify on completion
 if [[ -s $ROLLBACK_LOG ]]; then

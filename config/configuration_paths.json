@@ -1,35 +1,35 @@
 {
   "azure": {
-    "regions": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/azure/azure_regions.json",
-    "vm_families": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/azure/azure_vm_families.json",
-    "networks": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/azure/azure_networks.json",
-    "storage": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/azure/azure_storage.json"
+    "regions": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/azure/azure_regions.json",
+    "vm_families": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/azure/azure_vm_families.json",
+    "networks": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/azure/azure_networks.json",
+    "storage": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/azure/azure_storage.json"
   },
   "aws": {
-    "regions": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/aws/aws_regions.json",
-    "instance_types": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/aws/aws_instance_types.json",
-    "networks": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/aws/aws_networks.json",
-    "storage": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/aws/aws_storage.json"
+    "regions": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/aws/aws_regions.json",
+    "instance_types": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/aws/aws_instance_types.json",
+    "networks": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/aws/aws_networks.json",
+    "storage": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/aws/aws_storage.json"
   },
   "gcp": {
-    "regions": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/gcp/gcp_regions.json",
-    "machine_types": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/gcp/gcp_machine_types.json",
-    "networks": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/gcp/gcp_networks.json",
-    "storage": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/cloud_providers/gcp/gcp_storage.json"
+    "regions": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/gcp/gcp_regions.json",
+    "machine_types": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/gcp/gcp_machine_types.json",
+    "networks": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/gcp/gcp_networks.json",
+    "storage": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/cloud_providers/gcp/gcp_storage.json"
   },
   "common": {
-    "logging": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/logging.json",
-    "monitoring": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/monitoring.json",
-    "security": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/security.json",
-    "namespaces": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/common/namespaces.json"
+    "logging": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/common/logging.json",
+    "monitoring": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/common/monitoring.json",
+    "security": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/common/security.json",
+    "namespaces": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/common/namespaces.json"
   },
   "environments": {
-    "production": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/environments/production.json",
-    "staging": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/environments/staging.json",
-    "development": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/environments/development.json"
+    "production": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/environments/production.json",
+    "staging": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/environments/staging.json",
+    "development": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/environments/development.json"
   },
   "github": {
-    "actions": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/github/github_actions.json",
-    "secrets": "/Users/pandora/VS_Code_Projects/aks-deployment-1/config/github/github_secrets.json"
+    "actions": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/github/github_actions.json",
+    "secrets": "/Users/pandora/VS_Code_Projects/ABCDEfGHIJKL/config/github/github_secrets.json"
   }
 }

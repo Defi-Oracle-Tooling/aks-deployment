@@ -1,14 +1,14 @@
-# BESU_AKS_DEPLOYMENT
+# ABCDEFGHIJKL_DEPLOYMENT
 
 THIS_PROJECT_DEPLOYS_A_**HYPERLEDGER_BESU**_BLOCKCHAIN_NETWORK_USING_**AZURE_KUBERNETES_SERVICE_(AKS)**.
 
-![AKS_DEPLOYMENT](docs/images/aks_deployment.png)
+![AKS_DEPLOYMENT](docs/images/ABCDEfGHIJKL.png)
 
 ## 🏗️_**DEPLOYMENT_PROCESS**
 1._CLONE_THE_REPO:
     ```bash
-    git_clone_https://github.com/yourrepo/aks-deployment-1.git
-    cd_aks-deployment-1
+    git_clone_https://github.com/yourrepo/ABCDEfGHIJKL.git
+    cd_ABCDEfGHIJKL
     ```
 2._ENSURE_AZURE_CLI_IS_INSTALLED_&_LOGGED_IN:
     ```bash
@@ -58,7 +58,7 @@ THIS_PROJECT_DEPLOYS_A_**HYPERLEDGER_BESU**_BLOCKCHAIN_NETWORK_USING_**AZURE_KUB
 | 24         | Standard_D4s_v4  | 5              |
 | 10         | Standard_D2s_v4  | 4              |
 
-# AKS Deployment Script
+# ABCDEfGHIJKL Deployment Script
 
 ## Overview
 This script deploys Azure Kubernetes Service (AKS) clusters to multiple regions as specified in `regions.txt`.

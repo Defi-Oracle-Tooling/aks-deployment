@@ -151,8 +151,8 @@ The deployment includes a unified cleanup mechanism:
 ## Steps
 1. Clone the repository:
     ```bash
-    git clone https://github.com/yourrepo/aks-deployment-1.git
-    cd aks-deployment-1
+    git clone https://github.com/yourrepo/ABCDEfGHIJKL.git
+    cd ABCDEfGHIJKL
     ```
 2. Ensure Azure CLI is installed and logged in:
     ```bash
