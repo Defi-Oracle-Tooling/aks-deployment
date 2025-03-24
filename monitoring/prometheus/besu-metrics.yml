@@ -282,3 +282,32 @@ recording_rules:
           expr: besu_network_peer_count{chain_id="1337"}
         - record: besu:sync_status_devnet
           expr: besu_synchronizer_sync_status{chain_id="1337"}
+
+    - name: besu.rules
+      rules:
+        - alert: BesuNodeDown
+          expr: up{job="besu"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Besu node is down"
+            description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
+
+        - alert: BesuPeerCountLow
+          expr: besu_network_peer_count < 3
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Low peer count"
+            description: "Node {{ $labels.instance }} has less than 3 peers for 15 minutes"
+
+        - alert: BesuBlockHeight
+          expr: (max(besu_blockchain_height) - besu_blockchain_height) > 50
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node falling behind"
+            description: "Node {{ $labels.instance }} is more than 50 blocks behind the network"

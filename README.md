@@ -1,37 +1,36 @@
-# Besu AKS Deployment
+# BESU_AKS_DEPLOYMENT
 
-This project deploys a **Hyperledger Besu** blockchain network using **Azure Kubernetes Service (AKS)**.
+THIS_PROJECT_DEPLOYS_A_**HYPERLEDGER_BESU**_BLOCKCHAIN_NETWORK_USING_**AZURE_KUBERNETES_SERVICE_(AKS)**.
 
-![AKS Deployment](docs/images/aks_deployment.png)
+![AKS_DEPLOYMENT](docs/images/aks_deployment.png)
 
-## 🏗️ **Deployment Process**
-1. Clone the repo:
+## 🏗️_**DEPLOYMENT_PROCESS**
+1._CLONE_THE_REPO:
     ```bash
-    git clone https://github.com/yourrepo/aks-deployment-1.git
-    cd aks-deployment-1
+    git_clone_https://github.com/yourrepo/aks-deployment-1.git
+    cd_aks-deployment-1
     ```
-2. Ensure Azure CLI is installed & logged in:
+2._ENSURE_AZURE_CLI_IS_INSTALLED_&_LOGGED_IN:
     ```bash
-    az login
-    az account set --subscription YOUR_SUBSCRIPTION_ID
+    az_login
+    az_account_set_--subscription_YOUR_SUBSCRIPTION_ID
     ```
-3. Deploy AKS clusters across all regions:
+3._DEPLOY_AKS_CLUSTERS_ACROSS_ALL_REGIONS:
     ```bash
-    chmod +x deploy.sh
+    chmod_+x_deploy.sh
     ./deploy.sh
     ```
 
-## 📌 **How This Works**
-- **Reads `regions.txt`** for all supported Azure regions.
-- **Fetches available vCPU quotas** dynamically.
-- **Chooses the best VM size (`D16s_v4`, `D4s_v4`, `D2s_v4`)**.
-- **Automatically scales nodes** based on quotas.
-- **Retries failed deployments** up to 2 times.
-- **Logs errors in `failed_regions.log`**.
-- **Logs successful deployments in `success_regions.log`**.
-- **Logs detailed deployment process in `deployment.log`**.
-- **Triggers alerts via Azure Monitor if deployments fail**.
-- **Cleans up partially created resources in case of deployment failures**.
+## 📌_**HOW_THIS_WORKS**
+-_**READS_`regions.txt`**_FOR_ALL_SUPPORTED_AZURE_REGIONS.
+-_**FETCHES_AVAILABLE_VCPU_QUOTAS**_DYNAMICALLY.
+-_**CHOOSES_THE_BEST_VM_SIZE_(`D16s_v4`,_`D4s_v4`,_`D2s_v4`)**.
+-_**AUTOMATICALLY_SCALES_NODES**_BASED_ON_QUOTAS.
+-_**RETRIES_FAILED_DEPLOYMENTS**_UP_TO_2_TIMES.
+-_**LOGS_ERRORS_IN_`failed_regions.log`**.
+-_**LOGS_SUCCESSFUL_DEPLOYMENTS_IN_`success_regions.log`**.
+-_**LOGS_DETAILED_DEPLOYMENT_PROCESS_IN_`deployment.log`**.
+-_**TRIGGERS_ALERTS_VIA_AZURE_MONITOR_IF_DEPLOYMENTS_FAIL**.
 
 ![Deployment Workflow](docs/images/deployment_workflow.png)
 
@@ -103,3 +102,4 @@ This script deploys Azure Kubernetes Service (AKS) clusters to multiple regions 
 - If a region's AKS cluster is already healthy, it will be skipped and recorded in `success_regions.log`.
 - The script cleans up partially created resources in case of deployment failures.
 - The script notifies the team about the deployment status, including both successes and failures.
+

@@ -1,0 +1,31 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "title": "Besu Network Overview",
+  "description": "Overview of Besu network performance and health",
+  "panels": [
+    {
+      "title": "Network Status",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "besu_network_peer_count",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Block Height",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "besu_blockchain_height",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

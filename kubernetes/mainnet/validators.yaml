@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: besu-validator
+  namespace: besu
+spec:
+  serviceName: besu-validator
+  replicas: 7
+  selector:
+    matchLabels:
+      app: besu-validator
+      network: mainnet
+  template:
+    metadata:
+      labels:
+        app: besu-validator
+        network: mainnet
+    spec:
+      containers:
+      - name: besu
+        image: hyperledger/besu:latest
+        resources:
+          requests:
+            cpu: "24"
+            memory: "32Gi"
+          limits:
+            cpu: "24"
+            memory: "32Gi"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 512Gi
+      storageClassName: premium-ssd

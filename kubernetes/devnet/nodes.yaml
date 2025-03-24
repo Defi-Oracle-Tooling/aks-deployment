@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: besu-node-devnet
+  namespace: besu-dev
+spec:
+  serviceName: besu-node-devnet
+  replicas: 2
+  selector:
+    matchLabels:
+      app: besu-node
+      network: devnet
+  template:
+    metadata:
+      labels:
+        app: besu-node
+        network: devnet
+    spec:
+      containers:
+      - name: besu
+        image: hyperledger/besu:latest
+        resources:
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 100Gi
+      storageClassName: standard
